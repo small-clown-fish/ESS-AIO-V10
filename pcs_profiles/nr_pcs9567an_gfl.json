@@ -1,0 +1,292 @@
+{
+  "profile_key": "nr_pcs9567an_gfl",
+  "display_name": "NR PCS-9567AN GFL R3.0",
+  "enabled": true,
+  "vendor": "NR Electric / 南瑞",
+  "model": "PCS-9567AN",
+  "protocol": "MODBUS TCP R3.0 GFL",
+  "driver": "generic_modbus_pcs",
+  "host": "192.168.1.100",
+  "port": 502,
+  "unit_id": 1,
+  "timeout": 3.0,
+  "address_offset": 0,
+  "power_sign": {
+    "positive": "discharge",
+    "negative": "charge"
+  },
+  "notes": [
+    "Generated from PCS-9567AN_MODBUS_TCP(R3.0 GFL).xlsx.",
+    "This is a profile-driven adapter: strategy outputs active_power_kw, the profile decides Modbus address/function/scale.",
+    "Set active power: holding register 60001, FC06, INT16, scale 1 kW.",
+    "Set reactive power: holding register 60002, FC06, INT16, scale 1 kVar.",
+    "Power factor setpoint: holding register 60003, FC06, INT16, scale 0.01.",
+    "Watchdog/heartbeat setpoint: holding register 60004, FC06, INT16. Disabled unless PCS heartbeat is explicitly enabled.",
+    "Remote controls use FC05/write_coil according to the table: coil 2 start/stop, coil 3 standby, coil 4 one-key start, coil 5 DC breaker.",
+    "If field packet capture shows 1-based documentation addresses, set address_offset=-1 for this profile or for affected points."
+  ],
+  "points": {
+    "active_power": {
+      "register_type": "input",
+      "address": 63,
+      "scale": 0.1,
+      "offset": 0.0,
+      "name_cn": "变流器总有功功率",
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "kW",
+      "access": "RO",
+      "source_row_hint": "P_Conv_Total"
+    },
+    "reactive_power": {
+      "register_type": "input",
+      "address": 64,
+      "scale": 0.1,
+      "offset": 0.0,
+      "name_cn": "变流器总无功功率",
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "kVar",
+      "access": "RO",
+      "source_row_hint": "REACTIVE_Q_Total"
+    },
+    "dc_voltage": {
+      "register_type": "input",
+      "address": 1,
+      "scale": 0.1,
+      "offset": 0.0,
+      "name_cn": "电池电压",
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "V",
+      "access": "RO",
+      "source_row_hint": "U_Bat"
+    },
+    "dc_current": {
+      "register_type": "input",
+      "address": 3,
+      "scale": 0.1,
+      "offset": 0.0,
+      "name_cn": "直流电流",
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "A",
+      "access": "RO",
+      "source_row_hint": "I_DC"
+    },
+    "set_active_power_feedback": {
+      "register_type": "input",
+      "address": 40,
+      "scale": 0.1,
+      "offset": 0.0,
+      "name_cn": "变流器有功功率指令反馈",
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "kW",
+      "access": "RO",
+      "source_row_hint": "P_Setpoint_Conv"
+    },
+    "set_reactive_power_feedback": {
+      "register_type": "input",
+      "address": 41,
+      "scale": 0.1,
+      "offset": 0.0,
+      "name_cn": "变流器无功功率指令反馈",
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "kVar",
+      "access": "RO",
+      "source_row_hint": "Q_Setpoint_Conv"
+    },
+    "set_active_power": {
+      "register_type": "holding",
+      "address": 60001,
+      "scale": 1.0,
+      "offset": 0.0,
+      "name_cn": "遥调有功",
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "kW",
+      "access": "WO",
+      "write_function": "single",
+      "source_row_hint": "YT_P"
+    },
+    "set_reactive_power": {
+      "register_type": "holding",
+      "address": 60002,
+      "scale": 1.0,
+      "offset": 0.0,
+      "name_cn": "遥调无功",
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "kVar",
+      "access": "WO",
+      "write_function": "single",
+      "source_row_hint": "YT_Q"
+    },
+    "set_power_factor": {
+      "register_type": "holding",
+      "address": 60003,
+      "scale": 0.01,
+      "offset": 0.0,
+      "name_cn": "遥调功率因数",
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "",
+      "access": "WO",
+      "write_function": "single",
+      "source_row_hint": "YT_FACTOR"
+    },
+    "heartbeat": {
+      "register_type": "holding",
+      "address": 60004,
+      "scale": 1.0,
+      "offset": 0.0,
+      "name_cn": "遥调看门狗计数",
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "",
+      "access": "WO",
+      "write_function": "single",
+      "source_row_hint": "YT_WhDog"
+    },
+    "start_cmd": {
+      "register_type": "coil",
+      "address": 2,
+      "name_cn": "遥控开关机-启动",
+      "access": "WO",
+      "write_function": "fc05",
+      "write_value": 1,
+      "source_row_hint": "Tele-Control Stop/Start"
+    },
+    "stop_cmd": {
+      "register_type": "coil",
+      "address": 2,
+      "name_cn": "遥控开关机-停机",
+      "access": "WO",
+      "write_function": "fc05",
+      "write_value": 0,
+      "source_row_hint": "Tele-Control Stop/Start"
+    },
+    "standby_cmd": {
+      "register_type": "coil",
+      "address": 3,
+      "name_cn": "遥控待机",
+      "access": "WO",
+      "write_function": "fc05",
+      "write_value": 1,
+      "source_row_hint": "Tele-Control Standby"
+    },
+    "hv_on_cmd": {
+      "register_type": "coil",
+      "address": 4,
+      "name_cn": "遥控一键启机",
+      "access": "WO",
+      "write_function": "fc05",
+      "write_value": 1,
+      "source_row_hint": "Tele-Control One Key Start"
+    },
+    "hv_off_cmd": {
+      "register_type": "coil",
+      "address": 2,
+      "name_cn": "遥控停机",
+      "access": "WO",
+      "write_function": "fc05",
+      "write_value": 0,
+      "source_row_hint": "Tele-Control Stop"
+    },
+    "close_dc_breaker_cmd": {
+      "register_type": "coil",
+      "address": 5,
+      "name_cn": "遥控直流断路器合闸",
+      "access": "WO",
+      "write_function": "fc05",
+      "write_value": 1,
+      "source_row_hint": "Tele-Control DC CB"
+    },
+    "open_dc_breaker_cmd": {
+      "register_type": "coil",
+      "address": 5,
+      "name_cn": "遥控直流断路器分闸",
+      "access": "WO",
+      "write_function": "fc05",
+      "write_value": 0,
+      "source_row_hint": "Tele-Control DC CB"
+    },
+    "reset_fault_cmd": {
+      "register_type": "coil",
+      "address": 1,
+      "name_cn": "预留故障复位/录波触发点",
+      "access": "WO",
+      "write_function": "fc05",
+      "write_value": 1,
+      "source_row_hint": "Placeholder; verify on site before using"
+    },
+    "dc_breaker_status": {
+      "register_type": "discrete_input",
+      "address": 5,
+      "scale": 1.0,
+      "offset": 0.0,
+      "name_cn": "直流断路器状态占位",
+      "data_type": "UINT16",
+      "register_count": 1,
+      "unit": "",
+      "access": "RO",
+      "open_value": 0,
+      "closed_value": 1,
+      "source_row_hint": "Status point not confirmed; adjust after field validation"
+    }
+  },
+  "capabilities": {
+    "active_power_control": {
+      "enabled": true,
+      "point": "set_active_power"
+    },
+    "reactive_power_control": {
+      "enabled": true,
+      "point": "set_reactive_power"
+    },
+    "power_factor_control": {
+      "enabled": true,
+      "point": "set_power_factor"
+    },
+    "heartbeat": {
+      "enabled": true,
+      "point": "heartbeat"
+    },
+    "dc_breaker_control": {
+      "enabled": true
+    }
+  },
+  "commands": {
+    "start": {
+      "point": "start_cmd"
+    },
+    "stop": {
+      "point": "stop_cmd"
+    },
+    "standby": {
+      "point": "standby_cmd"
+    },
+    "reset_fault": {
+      "point": "reset_fault_cmd"
+    },
+    "hv_on": {
+      "point": "hv_on_cmd"
+    },
+    "hv_off": {
+      "point": "hv_off_cmd"
+    },
+    "close_dc_breaker": {
+      "point": "close_dc_breaker_cmd"
+    },
+    "open_dc_breaker": {
+      "point": "open_dc_breaker_cmd"
+    }
+  },
+  "point_aliases": {
+    "active_power_command": "set_active_power",
+    "reactive_power_command": "set_reactive_power",
+    "power_factor_command": "set_power_factor"
+  }
+}

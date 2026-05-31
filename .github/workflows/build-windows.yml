@@ -1,0 +1,79 @@
+name: Build Windows Web-Only Lite EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-windows-web-lite:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          if (Test-Path requirements.txt) {
+            pip install -r requirements.txt
+          }
+          pip install pyinstaller
+
+      - name: Build Web-Only Lite with PyInstaller
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python build_pyinstaller.py
+
+      - name: Verify Web-Only Lite output
+        shell: pwsh
+        run: |
+          $required = @(
+            "dist/ESS-AIO-Web/ESS-AIO-Web.exe",
+            "dist/ESS-AIO-Runtime/ESS-AIO-Runtime.exe",
+            "dist/ESS-AIO-Shutdown/ESS-AIO-Shutdown.exe"
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              Get-ChildItem -Recurse dist | Select-Object FullName
+              throw "$path not found"
+            }
+          }
+          if (Test-Path "dist/ESS-AIO/ESS-AIO.exe") {
+            throw "Classic UI ESS-AIO.exe should not be included in Web-Only Lite build"
+          }
+          if (Test-Path "dist/ESS-AIO-Launcher/ESS-AIO-Launcher.exe") {
+            throw "Classic Launcher should not be included in Web-Only Lite build"
+          }
+
+      - name: Create Web-Only Lite ZIP artifact
+        shell: pwsh
+        run: |
+          if (Test-Path "ESS-AIO-Web-Only-Lite.zip") {
+            Remove-Item "ESS-AIO-Web-Only-Lite.zip" -Force
+          }
+          New-Item -ItemType Directory -Force -Path "artifact" | Out-Null
+          Copy-Item -Recurse -Force "dist/ESS-AIO-Web" "artifact/ESS-AIO-Web"
+          Copy-Item -Recurse -Force "dist/ESS-AIO-Runtime" "artifact/ESS-AIO-Runtime"
+          Copy-Item -Recurse -Force "dist/ESS-AIO-Shutdown" "artifact/ESS-AIO-Shutdown"
+          foreach ($doc in @("README.md", "CHANGELOG.md", "RELEASE_NOTES.md", "ROADMAP.md", "PACKAGING_WINDOWS.md")) {
+            if (Test-Path $doc) { Copy-Item -Force $doc "artifact/$doc" }
+          }
+          Compress-Archive -Path "artifact/*" -DestinationPath "ESS-AIO-Web-Only-Lite.zip" -Force
+
+      - name: Upload Web-Only Lite artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ESS-AIO-Web-Only-Lite
+          path: ESS-AIO-Web-Only-Lite.zip
+          retention-days: 14

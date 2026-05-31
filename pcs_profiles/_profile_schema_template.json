@@ -1,0 +1,75 @@
+{
+  "profile_key": "vendor_model_example",
+  "display_name": "Vendor Model Example",
+  "vendor": "Vendor",
+  "model": "Model",
+  "driver": "generic_modbus_pcs",
+  "host": "192.168.1.100",
+  "port": 502,
+  "unit_id": 1,
+  "timeout": 3.0,
+  "address_offset": 0,
+  "power_sign": {
+    "positive": "discharge",
+    "negative": "charge"
+  },
+  "capabilities": {
+    "active_power_control": {"enabled": true, "point": "set_active_power"},
+    "reactive_power_control": {"enabled": false, "point": "set_reactive_power"},
+    "heartbeat": {"enabled": false, "point": "heartbeat"},
+    "dc_breaker_control": {"enabled": false}
+  },
+  "commands": {
+    "start": {"point": "start_cmd"},
+    "stop": {"point": "stop_cmd"},
+    "reset_fault": {"point": "reset_fault_cmd"},
+    "close_dc_breaker": {"point": "close_dc_breaker_cmd"},
+    "open_dc_breaker": {"point": "open_dc_breaker_cmd"}
+  },
+  "point_aliases": {
+    "active_power_command": "set_active_power",
+    "reactive_power_command": "set_reactive_power"
+  },
+  "points": {
+    "active_power": {
+      "register_type": "input",
+      "address": 100,
+      "address_offset": 0,
+      "scale": 0.1,
+      "offset": 0.0,
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "kW",
+      "access": "RO"
+    },
+    "set_active_power": {
+      "register_type": "holding",
+      "address": 60001,
+      "address_offset": 0,
+      "scale": 1.0,
+      "offset": 0.0,
+      "data_type": "INT16",
+      "register_count": 1,
+      "unit": "kW",
+      "access": "WO",
+      "write_function": "single"
+    },
+    "set_reactive_power": {
+      "register_type": "holding",
+      "address": 60002,
+      "scale": 1.0,
+      "data_type": "INT16",
+      "write_function": "single",
+      "pre_actions": [
+        {"point": "reactive_power_remote_enable", "value": 1}
+      ]
+    },
+    "start_cmd": {
+      "register_type": "coil",
+      "address": 2,
+      "write_function": "fc05",
+      "write_value": 1,
+      "access": "WO"
+    }
+  }
+}
