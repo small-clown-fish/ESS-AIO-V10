@@ -6,8 +6,29 @@ import sys
 import json
 import socket
 import urllib.request
+import traceback
+from pathlib import Path
 
-RUNTIME_API_SCHEMA = "9.9.18-web-only-lite"
+RUNTIME_API_SCHEMA = "9.9.23-web-lite-packaging-repair"
+
+
+def _runtime_log_dir() -> Path:
+    if os.name == "nt":
+        base = Path(os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or Path.home())
+    else:
+        base = Path.home() / ".local" / "share"
+    path = base / "ESS-AIO" / "logs"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+def _write_runtime_fatal(exc: BaseException) -> None:
+    detail = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    try:
+        log = _runtime_log_dir() / "runtime_fatal.log"
+        log.write_text(detail, encoding="utf-8")
+        print(f"[RUNTIME][FATAL] {exc}. Log: {log}")
+    except Exception:
+        print(detail)
 
 def _health_url(host: str, port: int) -> str:
     return f"http://{host}:{port}/api/health"
@@ -91,4 +112,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        _write_runtime_fatal(exc)
+        raise

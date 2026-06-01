@@ -153,4 +153,8 @@ This patch fixes Web UI action binding for dynamically rendered tables. Cluster 
 ## v9.9.21 LTS Action Click Target Fix
 
 Fixed dynamic Project / Cluster Binding action buttons where Edit, Clear Power Map, Remove, Add, and Save could appear clickable but do nothing. The root cause was fragile inline/dynamic event handling when the click target was a text node or the generated onclick attribute contained quoted device/cluster names. Dynamic action buttons now use safer encoded arguments and a robust event dispatcher.
-# ESS-AIO-V10
+
+
+## v9.9.23 Packaging note
+
+Default Windows field package is Web-Only Lite. Open `ESS-AIO-Web.exe`; it starts the bundled Runtime from `ESS-AIO-Runtime/` and opens the browser.

@@ -1,3 +1,13 @@
+# CHANGELOG
+
+## v9.9.23 - Web Lite Packaging Repair
+
+- Fixed Web-Only Lite packaging layout.
+- The release ZIP now contains a single operator folder with `ESS-AIO-Web.exe`, `ESS-AIO-Shutdown.exe`, and `ESS-AIO-Runtime/ESS-AIO-Runtime.exe`.
+- `ESS-AIO-Web.exe` now searches both same-folder and bundled Runtime subfolder locations.
+- Runtime startup uses the Runtime folder as cwd and writes `logs/runtime_stdout.log` and `logs/runtime_stderr.log` for troubleshooting.
+- Added visible error dialogs when Runtime cannot be found or fails health check.
+
 # v9.9.22 LTS Project Config Edit Fix
 
 - Fixed BMS Config / PCS Config Edit buttons so they visibly load the selected device into the edit form.

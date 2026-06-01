@@ -14,6 +14,7 @@ import sys
 import time
 import urllib.request
 import webbrowser
+import traceback
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -61,37 +62,93 @@ def _schema_ok(info: dict) -> bool:
     return True
 
 
+def _log_dir() -> Path:
+    base = _base_dir()
+    path = base / "logs"
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return path
+
+
+def _notify_error(title: str, message: str) -> None:
+    print(f"[WEB][ERROR] {title}: {message}")
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, message, title, 0x10)
+        except Exception:
+            pass
+
+
+def _runtime_candidates(base: Path) -> list[Path]:
+    exe = "ESS-AIO-Runtime.exe" if os.name == "nt" else "ESS-AIO-Runtime"
+    return [
+        base / exe,
+        base / "ESS-AIO-Runtime" / exe,
+        base.parent / "ESS-AIO-Runtime" / exe,
+        base.parent / exe,
+    ]
+
+
 def _start_runtime(runtime_url: str) -> subprocess.Popen | None:
     info = _health(runtime_url)
     if _schema_ok(info):
         print(f"[WEB] Runtime already running at {runtime_url}: {info}")
         return None
+
     base = _base_dir()
     env = os.environ.copy()
     env["ESS_AIO_RUNTIME_URL"] = runtime_url
     env["ESS_AIO_RUNTIME_PORT"] = _runtime_port_from_url(runtime_url)
+
     if _is_frozen():
-        candidates = [
-            base.parent / "ESS-AIO-Runtime" / "ESS-AIO-Runtime.exe",
-            base / "ESS-AIO-Runtime.exe",
-        ]
+        candidates = _runtime_candidates(base)
         runtime_exe = next((p for p in candidates if p.exists()), None)
         if runtime_exe is None:
-            raise FileNotFoundError("Cannot find ESS-AIO-Runtime.exe next to ESS-AIO-Web")
+            searched = "\n".join(str(p) for p in candidates)
+            raise FileNotFoundError(
+                "Cannot find ESS-AIO-Runtime.exe.\n\nSearched:\n" + searched
+            )
         cmd = [str(runtime_exe)]
+        cwd = runtime_exe.parent
     else:
         cmd = [_python_executable(), str(base / "app_runtime.py")]
+        cwd = base
+
     creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
+    log_dir = _log_dir()
+    runtime_log = log_dir / "runtime_stdout.log"
+    runtime_err = log_dir / "runtime_stderr.log"
     print("[WEB] Starting Runtime:", " ".join(cmd))
-    proc = subprocess.Popen(cmd, cwd=str(base), env=env, creationflags=creationflags)
-    deadline = time.time() + 25.0
+    print("[WEB] Runtime cwd:", cwd)
+    stdout = open(runtime_log, "a", encoding="utf-8", errors="replace")
+    stderr = open(runtime_err, "a", encoding="utf-8", errors="replace")
+    proc = subprocess.Popen(cmd, cwd=str(cwd), env=env, creationflags=creationflags, stdout=stdout, stderr=stderr)
+
+    deadline = time.time() + 30.0
+    last_info: dict = {}
     while time.time() < deadline:
-        info = _health(runtime_url)
-        if _schema_ok(info):
+        if proc.poll() is not None:
+            msg = (
+                f"Runtime exited early with code {proc.returncode}.\n"
+                f"Check logs:\n{runtime_log}\n{runtime_err}"
+            )
+            _notify_error("ESS-AIO Runtime failed to start", msg)
+            return proc
+        last_info = _health(runtime_url)
+        if _schema_ok(last_info):
             print(f"[WEB] Runtime ready at {runtime_url}")
             return proc
         time.sleep(0.5)
-    print("[WEB] Runtime did not pass health check yet; opening browser anyway.")
+
+    msg = (
+        f"Runtime did not pass health check at {runtime_url}.\n"
+        f"Last health: {last_info}\n"
+        f"Check logs:\n{runtime_log}\n{runtime_err}"
+    )
+    _notify_error("ESS-AIO Runtime not reachable", msg)
     return proc
 
 
@@ -143,4 +200,14 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        detail = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        try:
+            log = _log_dir() / "web_launcher_error.log"
+            log.write_text(detail, encoding="utf-8")
+            _notify_error("ESS-AIO Web launcher error", f"{exc}\n\nLog: {log}")
+        except Exception:
+            print(detail)
+        raise

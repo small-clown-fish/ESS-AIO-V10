@@ -67,3 +67,19 @@ The full build additionally creates:
 ## Size note
 
 Runtime currently still depends on PySide6 internally because the headless Runtime reuses the existing Qt/MainWindow worker host. Therefore Web-Only Lite removes the extra Classic UI executables, but PySide6 is still included in Runtime until the Runtime core is fully decoupled from Qt.
+
+
+## v9.9.23 Web-Only Lite layout
+
+The default build creates:
+
+```text
+ dist/ESS-AIO-Web-Lite/
+   ESS-AIO-Web.exe
+   ESS-AIO-Shutdown.exe
+   ESS-AIO-Runtime/
+     ESS-AIO-Runtime.exe
+     _internal/
+```
+
+Start by double-clicking `ESS-AIO-Web.exe`. Do not move it away from the folder.

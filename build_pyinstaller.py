@@ -2,15 +2,19 @@ from __future__ import annotations
 
 """PyInstaller build script for ESS-AIO Web-Only Lite.
 
-Default output is the field package:
+Default Windows field package is now a *single user-facing folder*:
 
-    ESS-AIO-Web        -> starts Runtime and opens browser
-    ESS-AIO-Runtime    -> headless runtime / API / Web EMS
-    ESS-AIO-Shutdown   -> emergency shutdown helper
+    dist/ESS-AIO-Web-Lite/
+        ESS-AIO-Web.exe
+        ESS-AIO-Shutdown.exe
+        ESS-AIO-Runtime/
+            ESS-AIO-Runtime.exe
+            _internal/
 
-Classic PySide UI and Classic Launcher are intentionally excluded from the
-normal build to reduce Windows artifact size and avoid starting an extra UI.
-Use --full only when you explicitly need the old Classic UI package.
+Why this layout:
+- Runtime is large and needs its own PyInstaller onedir _internal folder.
+- Web and Shutdown are small onefile launchers at the top level.
+- Users only need to double-click ESS-AIO-Web.exe.
 """
 
 import os
@@ -22,6 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "dist"
 BUILD = ROOT / "build"
+LITE_DIR = DIST / "ESS-AIO-Web-Lite"
 
 DATA_ITEMS = [
     ("bms_logger/protocols", "bms_logger/protocols"),
@@ -46,9 +51,6 @@ DATA_ITEMS = [
     ("PACKAGING_WINDOWS.md", "."),
 ]
 
-# Runtime still embeds the existing Qt-based MainWindow object as the worker
-# host, so PySide6 is currently required by Runtime. Web/Shutdown launchers do
-# not need PySide hidden imports.
 RUNTIME_HIDDEN_IMPORTS = [
     "PySide6.QtCore",
     "PySide6.QtGui",
@@ -72,6 +74,7 @@ RUNTIME_HIDDEN_IMPORTS = [
     "pydantic",
     "requests",
     "multipart",
+    "python_multipart",
 ]
 
 CLASSIC_HIDDEN_IMPORTS = [
@@ -111,7 +114,15 @@ def _hidden_import_args(imports: list[str]) -> list[str]:
     return args
 
 
-def _pyinstaller(entry: str, name: str, hidden_imports: list[str], *, windowed: bool = True) -> None:
+def _pyinstaller(
+    entry: str,
+    name: str,
+    hidden_imports: list[str],
+    *,
+    windowed: bool = True,
+    onefile: bool = False,
+    add_data: bool = True,
+) -> None:
     if not (ROOT / entry).exists():
         print(f"[BUILD] Skip {name}: missing {entry}")
         return
@@ -121,17 +132,15 @@ def _pyinstaller(entry: str, name: str, hidden_imports: list[str], *, windowed: 
         "PyInstaller",
         "--noconfirm",
         "--clean",
-        "--onedir",
+        "--onefile" if onefile else "--onedir",
     ]
     if windowed:
         cmd.append("--windowed")
-    cmd.extend([
-        "--name",
-        name,
-        *_hidden_import_args(hidden_imports),
-        *_add_data_args(),
-        entry,
-    ])
+    cmd.extend(["--name", name])
+    cmd.extend(_hidden_import_args(hidden_imports))
+    if add_data:
+        cmd.extend(_add_data_args())
+    cmd.append(entry)
     print("[BUILD]", " ".join(cmd))
     subprocess.check_call(cmd, cwd=ROOT)
 
@@ -147,36 +156,85 @@ def _clean() -> None:
             pass
 
 
-def _verify(names: list[str]) -> None:
-    missing: list[str] = []
-    for name in names:
-        exe = DIST / name / _exe_name(name)
-        if not exe.exists():
-            missing.append(str(exe))
+def _copytree(src: Path, dst: Path) -> None:
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+
+
+def _copy_file(src: Path, dst: Path) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+
+
+def _assemble_lite() -> None:
+    if LITE_DIR.exists():
+        shutil.rmtree(LITE_DIR)
+    LITE_DIR.mkdir(parents=True, exist_ok=True)
+
+    runtime_dir = DIST / "ESS-AIO-Runtime"
+    runtime_exe = runtime_dir / _exe_name("ESS-AIO-Runtime")
+    web_exe = DIST / _exe_name("ESS-AIO-Web")
+    shutdown_exe = DIST / _exe_name("ESS-AIO-Shutdown")
+
+    missing = [str(p) for p in [runtime_exe, web_exe, shutdown_exe] if not p.exists()]
     if missing:
-        raise SystemExit("Missing build outputs:\n" + "\n".join(missing))
+        raise SystemExit("Missing build outputs before assembly:\n" + "\n".join(missing))
+
+    _copytree(runtime_dir, LITE_DIR / "ESS-AIO-Runtime")
+    _copy_file(web_exe, LITE_DIR / _exe_name("ESS-AIO-Web"))
+    _copy_file(shutdown_exe, LITE_DIR / _exe_name("ESS-AIO-Shutdown"))
+
+    for doc in ["README.md", "CHANGELOG.md", "RELEASE_NOTES.md", "ROADMAP.md", "PACKAGING_WINDOWS.md"]:
+        p = ROOT / doc
+        if p.exists():
+            _copy_file(p, LITE_DIR / doc)
+
+    # Operator helper for users who prefer batch files.
+    start_bat = LITE_DIR / "START_ESS_AIO_WEB.bat"
+    stop_bat = LITE_DIR / "STOP_ESS_AIO_RUNTIME.bat"
+    if os.name == "nt":
+        start_bat.write_text("@echo off\r\ncd /d %~dp0\r\nstart \"\" ESS-AIO-Web.exe\r\n", encoding="utf-8")
+        stop_bat.write_text("@echo off\r\ncd /d %~dp0\r\nESS-AIO-Shutdown.exe\r\npause\r\n", encoding="utf-8")
+
+
+def _verify_lite() -> None:
+    required = [
+        LITE_DIR / _exe_name("ESS-AIO-Web"),
+        LITE_DIR / _exe_name("ESS-AIO-Shutdown"),
+        LITE_DIR / "ESS-AIO-Runtime" / _exe_name("ESS-AIO-Runtime"),
+    ]
+    missing = [str(p) for p in required if not p.exists()]
+    if missing:
+        raise SystemExit("Missing Web-Lite package files:\n" + "\n".join(missing))
+    if not (LITE_DIR / "ESS-AIO-Runtime").is_dir():
+        raise SystemExit("Runtime directory missing in Web-Lite package")
 
 
 def build_lite() -> None:
-    _pyinstaller("app_runtime.py", "ESS-AIO-Runtime", RUNTIME_HIDDEN_IMPORTS)
-    _pyinstaller("app_web.py", "ESS-AIO-Web", [])
-    _pyinstaller("app_shutdown.py", "ESS-AIO-Shutdown", [])
-    _verify(["ESS-AIO-Runtime", "ESS-AIO-Web", "ESS-AIO-Shutdown"])
+    # Runtime stays onedir so its own _internal dependencies remain intact.
+    _pyinstaller("app_runtime.py", "ESS-AIO-Runtime", RUNTIME_HIDDEN_IMPORTS, onefile=False, windowed=True, add_data=True)
+
+    # Web and Shutdown are small onefile launchers placed at the top level.
+    _pyinstaller("app_web.py", "ESS-AIO-Web", [], onefile=True, windowed=True, add_data=False)
+    _pyinstaller("app_shutdown.py", "ESS-AIO-Shutdown", [], onefile=True, windowed=True, add_data=False)
+
+    _assemble_lite()
+    _verify_lite()
     print("[BUILD] Web-Only Lite OK.")
-    print("[BUILD] Start with dist/ESS-AIO-Web/" + _exe_name("ESS-AIO-Web"))
-    print("[BUILD] Emergency stop: dist/ESS-AIO-Shutdown/" + _exe_name("ESS-AIO-Shutdown"))
+    print("[BUILD] Start with:", LITE_DIR / _exe_name("ESS-AIO-Web"))
+    print("[BUILD] Emergency stop:", LITE_DIR / _exe_name("ESS-AIO-Shutdown"))
 
 
 def build_full() -> None:
     build_lite()
-    _pyinstaller("app.py", "ESS-AIO", CLASSIC_HIDDEN_IMPORTS)
+    _pyinstaller("app.py", "ESS-AIO", CLASSIC_HIDDEN_IMPORTS, onefile=False, windowed=True, add_data=True)
     _pyinstaller("app_launcher.py", "ESS-AIO-Launcher", [
         "PySide6.QtCore",
         "PySide6.QtGui",
         "PySide6.QtWidgets",
         "PySide6.QtNetwork",
-    ])
-    _verify(["ESS-AIO", "ESS-AIO-Launcher"])
+    ], onefile=True, windowed=True, add_data=False)
     print("[BUILD] Full Classic UI package OK.")
 
 
