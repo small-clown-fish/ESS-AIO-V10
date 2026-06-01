@@ -39,9 +39,9 @@ jobs:
         shell: pwsh
         run: |
           $required = @(
-            "dist/ESS-AIO-Web/ESS-AIO-Web.exe",
-            "dist/ESS-AIO-Runtime/ESS-AIO-Runtime.exe",
-            "dist/ESS-AIO-Shutdown/ESS-AIO-Shutdown.exe"
+            "dist/ESS-AIO-Web-Lite/ESS-AIO-Web.exe",
+            "dist/ESS-AIO-Web-Lite/ESS-AIO-Shutdown.exe",
+            "dist/ESS-AIO-Web-Lite/ESS-AIO-Runtime/ESS-AIO-Runtime.exe"
           )
           foreach ($path in $required) {
             if (-not (Test-Path $path)) {
@@ -49,6 +49,12 @@ jobs:
               throw "$path not found"
             }
           }
+
+          if (-not (Test-Path "dist/ESS-AIO-Web-Lite/ESS-AIO-Runtime/_internal")) {
+            Get-ChildItem -Recurse "dist/ESS-AIO-Web-Lite/ESS-AIO-Runtime" | Select-Object FullName
+            throw "Runtime _internal folder not found"
+          }
+
           if (Test-Path "dist/ESS-AIO/ESS-AIO.exe") {
             throw "Classic UI ESS-AIO.exe should not be included in Web-Only Lite build"
           }
@@ -62,14 +68,7 @@ jobs:
           if (Test-Path "ESS-AIO-Web-Only-Lite.zip") {
             Remove-Item "ESS-AIO-Web-Only-Lite.zip" -Force
           }
-          New-Item -ItemType Directory -Force -Path "artifact" | Out-Null
-          Copy-Item -Recurse -Force "dist/ESS-AIO-Web" "artifact/ESS-AIO-Web"
-          Copy-Item -Recurse -Force "dist/ESS-AIO-Runtime" "artifact/ESS-AIO-Runtime"
-          Copy-Item -Recurse -Force "dist/ESS-AIO-Shutdown" "artifact/ESS-AIO-Shutdown"
-          foreach ($doc in @("README.md", "CHANGELOG.md", "RELEASE_NOTES.md", "ROADMAP.md", "PACKAGING_WINDOWS.md")) {
-            if (Test-Path $doc) { Copy-Item -Force $doc "artifact/$doc" }
-          }
-          Compress-Archive -Path "artifact/*" -DestinationPath "ESS-AIO-Web-Only-Lite.zip" -Force
+          Compress-Archive -Path "dist/ESS-AIO-Web-Lite/*" -DestinationPath "ESS-AIO-Web-Only-Lite.zip" -Force
 
       - name: Upload Web-Only Lite artifact
         uses: actions/upload-artifact@v4
