@@ -9,7 +9,7 @@ import urllib.request
 import traceback
 from pathlib import Path
 
-RUNTIME_API_SCHEMA = "9.9.23-web-lite-packaging-repair"
+RUNTIME_API_SCHEMA = "9.9.24-web-lite-health-check-fix"
 
 
 def _runtime_log_dir() -> Path:
@@ -51,11 +51,10 @@ def _preflight_runtime_port(host: str, port: int) -> int:
     info = _runtime_health(host, port)
     if info.get("ok"):
         service = str(info.get("service", ""))
-        schema = str(info.get("api_schema", ""))
-        if (not service or "ESS-AIO Runtime" in service) and (not schema or any(t in schema for t in ("runtime", "web", "ESS-AIO"))):
+        if not service or "ESS-AIO Runtime" in service:
             print(f"[RUNTIME] Compatible runtime already running at http://{host}:{port}; not starting a second instance. info={info}")
             return 0
-        print(f"[RUNTIME] Port {port} is occupied by a non ESS-AIO service or incompatible runtime: {info}")
+        print(f"[RUNTIME] Port {port} is occupied by a non ESS-AIO service: {info}")
         return 3
     if _port_open(host, port):
         print(f"[RUNTIME] Port {port} is already in use by another process. Stop it before starting ESS-AIO Runtime.")

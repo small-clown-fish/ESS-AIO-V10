@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse, Response
 from PySide6.QtCore import QObject, QTimer
 
 
-API_SCHEMA_VERSION = "9.9.21-lts-inline-action-attr-fix"
+API_SCHEMA_VERSION = "9.9.24-web-lite-health-check-fix"
 
 
 class ClusterRequest(BaseModel):

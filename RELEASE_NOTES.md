@@ -1,3 +1,11 @@
+# Release Notes
+
+## v9.9.24 Web Lite Health Check Fix
+
+This release fixes the Web-only launcher false alarm where Runtime was actually running and returned `{ok: true}`, but Web.exe still displayed "Runtime not reachable" because the launcher used an overly strict api_schema text check.
+
+Use `ESS-AIO-Web.exe` from `dist/ESS-AIO-Web-Lite/`. Closing the browser still does not stop Runtime; use the Web shutdown page or `ESS-AIO-Shutdown.exe`.
+
 # RELEASE NOTES
 
 ## v9.9.23 Web Lite Packaging Repair

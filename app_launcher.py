@@ -39,25 +39,17 @@ def _health(runtime_url: str = DEFAULT_RUNTIME_URL, timeout_s: float = 0.5) -> d
 
 
 def _schema_ok(info: dict) -> bool:
-    """Return True when a local runtime is healthy enough for the UI.
+    """Return True when a local ESS-AIO Runtime is healthy enough for UI/Web.
 
-    v8.x evolves the Web/API schema frequently.  The previous launcher compared
-    the schema with one old hard-coded value, so a perfectly healthy newer
-    runtime returned {ok: true} but was still treated as failed by the watchdog.
-    For the fixed local port launcher, an explicit ok=True health response from
-    ESS-AIO Runtime is the compatibility contract; api_schema is now reported
-    for diagnostics instead of used as a strict blocker.
+    api_schema changes frequently across 9.x LTS patches and is diagnostic only.
+    The compatibility contract is ok=True plus an ESS-AIO Runtime service name.
     """
     if not isinstance(info, dict):
         return False
     if not bool(info.get("ok")):
         return False
     service = str(info.get("service", ""))
-    schema = str(info.get("api_schema", ""))
     if service and "ESS-AIO Runtime" not in service:
-        return False
-    if schema and not any(token in schema for token in ("runtime", "web", "ESS-AIO")):
-        # Be conservative if a foreign service happens to expose /api/health.
         return False
     return True
 

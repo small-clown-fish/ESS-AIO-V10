@@ -1,3 +1,12 @@
+# Changelog
+
+## v9.9.24 - Web Lite Health Check Fix
+
+### Fixed
+- Web launcher no longer rejects a healthy Runtime just because api_schema does not contain the words runtime/web/ESS-AIO.
+- Runtime preflight now accepts any ok=True ESS-AIO Runtime on the configured local port to avoid duplicate process and false incompatibility errors.
+- Classic launcher uses the same relaxed health compatibility rule.
+
 # CHANGELOG
 
 ## v9.9.23 - Web Lite Packaging Repair

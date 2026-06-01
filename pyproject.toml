@@ -1,6 +1,6 @@
 [project]
 name = "ess-aio"
-version = "9.9.23"
+version = "9.9.24"
 description = "ESS-AIO Web EMS 9.x LTS Platform"
 requires-python = ">=3.10"
 
@@ -19,5 +19,5 @@ dependencies = [
 ]
 
 [tool.ess_aio]
-build_id = "v9.9.23-web-lite-packaging-repair"
+build_id = "v9.9.24-web-lite-health-check-fix"
 profile_schema_version = 3

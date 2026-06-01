@@ -51,13 +51,19 @@ def _health(runtime_url: str, timeout_s: float = 0.7) -> dict:
 
 
 def _schema_ok(info: dict) -> bool:
-    if not isinstance(info, dict) or not bool(info.get("ok")):
+    """Accept any healthy ESS-AIO Runtime health response.
+
+    Older 9.x Runtime builds may report api_schema values such as
+    ``9.9.21-lts-inline-action-attr-fix`` that do not contain the words
+    "runtime" or "web". The Web launcher must not reject those healthy local
+    runtimes; api_schema is diagnostic only.
+    """
+    if not isinstance(info, dict):
+        return False
+    if not bool(info.get("ok")):
         return False
     service = str(info.get("service", ""))
-    schema = str(info.get("api_schema", ""))
     if service and "ESS-AIO Runtime" not in service:
-        return False
-    if schema and not any(token in schema for token in ("runtime", "web", "ESS-AIO")):
         return False
     return True
 
