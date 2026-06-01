@@ -158,3 +158,18 @@ Fixed dynamic Project / Cluster Binding action buttons where Edit, Clear Power M
 ## v9.9.23 Packaging note
 
 Default Windows field package is Web-Only Lite. Open `ESS-AIO-Web.exe`; it starts the bundled Runtime from `ESS-AIO-Runtime/` and opens the browser.
+
+
+## v9.9.25 LTS Field UX Dashboard Fix
+
+- Added visible BMS heartbeat feedback so operators can see when heartbeat start/stop commands are sent and acknowledged.
+- Restored explicit Clear Fault All Online button in BMS Control.
+- Fixed Register Debug device list to include live BMS device_states and configured Project BMS/PCS.
+- Enhanced BMS Live Devices with SOC / voltage / current / status summary columns.
+- Upgraded Overview into a site dashboard with device online counts, CSV state, strategy count and active issue summary.
+- Added runtime footer to each active page instead of only showing runtime status in the header.
+- Swapped BMS Live Devices above BMS Control Register Panel for a safer operator workflow.
+- Added PCS alarm/fault summary section.
+- Made Analyzer more visually guided with upload/select/analyze steps.
+- Fixed Curves live fallback and the const CURVES assignment bug that prevented curve rendering.
+- Repositioned Device List as read-only Device Status to reduce overlap with BMS/PCS Control pages.

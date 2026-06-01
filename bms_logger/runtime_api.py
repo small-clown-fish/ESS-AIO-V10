@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse, Response
 from PySide6.QtCore import QObject, QTimer
 
 
-API_SCHEMA_VERSION = "9.9.24-web-lite-health-check-fix"
+API_SCHEMA_VERSION = "9.9.26-lts-dashboard-bms-status-view"
 
 
 class ClusterRequest(BaseModel):
@@ -3965,7 +3965,19 @@ def _runtime_shutdown_html() -> str:
 
     .analyzer-upload-grid{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:12px}.upload-card,.analysis-card{background:rgba(15,23,42,.72);border:1px solid var(--line);border-radius:14px;padding:14px}.upload-card h3{margin:0 0 10px}.upload-card input[type=file]{width:100%;background:#020617;border:1px dashed #334155;border-radius:10px;padding:8px;color:var(--muted);margin-bottom:10px}.form-stack{display:grid;gap:10px;margin:8px 0 12px}.form-stack label{display:grid;gap:5px;color:var(--muted);font-size:12px}.form-stack input{width:100%;box-sizing:border-box}.small{font-size:12px}@media(max-width:1200px){.analyzer-upload-grid{grid-template-columns:repeat(2,minmax(180px,1fr));}}@media(max-width:700px){.analyzer-upload-grid{grid-template-columns:1fr;}}
 
-</style></head>
+
+    .runtime-page-footer{margin-top:18px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:rgba(5,11,20,.62);display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+    .runtime-page-footer b{color:var(--text)}
+    .status-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:10px 0 0}
+    .status-item{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:rgba(2,6,23,.35)}
+    .status-item .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.status-item .v{font-size:18px;font-weight:700;margin-top:4px}
+    .command-feedback{border:1px solid var(--line2);border-radius:12px;padding:10px 12px;background:rgba(47,155,255,.06);margin-top:10px}
+    .control-layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(360px,.85fr);gap:16px;align-items:start}
+    .quick-add-grid{display:grid;grid-template-columns:repeat(2,minmax(360px,1fr));gap:16px;align-items:start}.quick-add-card{border:1px solid var(--line);border-radius:14px;padding:14px;background:rgba(2,6,23,.25)}
+    .analyzer-visual-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:12px 0}.analysis-step{border:1px solid var(--line);border-radius:14px;padding:14px;background:rgba(2,6,23,.32)}.analysis-step h3{margin:0 0 8px}
+    @media(max-width:1100px){.control-layout,.quick-add-grid{grid-template-columns:1fr}}
+
+  </style></head>
 <body><div class="card"><h1>Shutdown ESS-AIO Runtime</h1>
 <p class="muted">This standalone page uses only one small script. Use it when the main Web UI is frozen or not responding. Closing the browser tab will <b>not</b> stop Runtime; use this button or the Windows shutdown helper.</p>
 <div class="row"><button class="danger" onclick="shutdownRuntime()">Shutdown Runtime</button><a href="/">Back to Web EMS</a><a href="/api/health" target="_blank">Health JSON</a></div>
@@ -4032,6 +4044,21 @@ def _runtime_dashboard_html() -> str:
     .card { background:linear-gradient(180deg,rgba(17,31,49,.94),rgba(8,18,31,.94)); border:1px solid var(--line); border-radius:16px; padding:16px; box-shadow:var(--shadow); }
     .card .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
     .card .value { font-size:30px; font-weight:760; margin-top:6px; }
+
+    .dashboard-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:16px}
+    .metric-card{position:relative;background:linear-gradient(180deg,rgba(18,33,55,.96),rgba(8,18,31,.96));border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow);overflow:hidden}
+    .metric-card:after{content:"";position:absolute;right:-28px;top:-28px;width:100px;height:100px;border-radius:999px;background:rgba(47,155,255,.08)}
+    .metric-card.hero{background:linear-gradient(135deg,rgba(47,155,255,.20),rgba(8,18,31,.96) 58%)}
+    .metric-label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+    .metric-value{font-size:30px;font-weight:800;margin-top:8px;letter-spacing:-.04em}
+    .metric-foot{color:var(--muted);font-size:12px;margin-top:8px}
+    .dashboard-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+    .chart-card{background:rgba(2,6,23,.34);border:1px solid var(--line);border-radius:16px;padding:16px}
+    .chart-title{font-weight:750;margin-bottom:12px;color:#dbeafe}
+    .bar-row{margin:12px 0}.bar-top{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:12px;margin-bottom:6px}.bar-top b{color:var(--text)}
+    .bar-track{height:10px;background:rgba(148,163,184,.16);border-radius:999px;overflow:hidden;border:1px solid rgba(148,163,184,.10)}
+    .bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2))}.bar-fill.ok{background:linear-gradient(90deg,#22c55e,#46d39a)}.bar-fill.warn{background:linear-gradient(90deg,#f59e0b,#facc15)}.bar-fill.bad{background:linear-gradient(90deg,#ef4444,#fb7185)}.bar-fill.accent{background:linear-gradient(90deg,#2f9bff,#22d3ee)}
+    #overviewDashboard.status-strip{display:block}
     .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .accent { color:var(--accent2); }
     .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     button, a.btn, select, input, textarea { background:#091523; color:var(--text); border:1px solid var(--line2); border-radius:11px; padding:9px 12px; text-decoration:none; font-size:13px; outline:none; }
@@ -4138,7 +4165,7 @@ def _runtime_dashboard_html() -> str:
         <button data-page="site" onclick="showPage('site')">Site Config</button>
       </div>
       <div class="nav-section">Devices</div>
-      <button data-page="devices" class="nav-item" onclick="showPage('devices')"><span class="nav-icon">▤</span><span>Device List</span></button>
+      <button data-page="devices" class="nav-item" onclick="showPage('devices')"><span class="nav-icon">▤</span><span>Device Status</span></button>
       <button data-page="ops" class="nav-item" onclick="showPage('ops')"><span class="nav-icon">▧</span><span>BMS Control</span></button>
       <button data-page="pcs" class="nav-item" onclick="showPage('pcs')"><span class="nav-icon">◈</span><span>PCS Control</span></button>
       <button data-page="registerdebug" class="nav-item" onclick="showPage('registerdebug')"><span class="nav-icon">⌗</span><span>Register Debug</span></button>
@@ -4188,13 +4215,15 @@ def _runtime_dashboard_html() -> str:
       </section>
       <section id="page-overview" data-title="Overview" class="page">
         <div class="cards" id="cards"></div>
+        <section class="section"><div class="head"><h2>Site Dashboard</h2><span class="muted">Runtime, device health, PCS/BMS summary and active alarm overview.</span></div><div class="content"><div id="overviewDashboard" class="status-strip"></div></div></section>
         <div class="grid2">
+          <section class="section"><div class="head"><h2>Active Alarms / Issues</h2><button onclick="showPage('alarmcenter')">Open Alarm Center</button></div><div class="scroll"><table><thead><tr><th>Severity</th><th>Area</th><th>Device</th><th>Message</th></tr></thead><tbody id="overviewAlarmRows"></tbody></table></div></section>
           <section class="section"><div class="head"><h2>Runtime Summary</h2></div><div class="content"><pre id="runtimeSummary">-</pre></div></section>
-          <section class="section"><div class="head"><h2>Soak Test</h2><a class="btn" href="/api/soak/status" target="_blank">Open JSON</a></div><div class="content"><pre id="soakSummary">-</pre></div></section>
         </div>
+        <section class="section"><div class="head"><h2>Soak Test</h2><a class="btn" href="/api/soak/status" target="_blank">Open JSON</a></div><div class="content"><pre id="soakSummary">-</pre></div></section>
       </section>
-      <section id="page-devices" data-title="Devices" class="page">
-        <section class="section"><div class="head"><h2>Devices</h2><div class="toolbar"><input id="deviceFilter" placeholder="Filter device..." oninput="renderDevices()" /><select id="typeFilter" onchange="renderDevices()"><option value="all">All</option><option value="BMS">BMS</option><option value="PCS">PCS</option></select><span class="muted" id="deviceCount"></span></div></div><div class="scroll"><table><thead><tr><th>Type</th><th>Name</th><th>Connection</th><th>Status</th><th>Errors</th><th>Latency</th><th>Last message</th></tr></thead><tbody id="devices"></tbody></table></div></section>
+      <section id="page-devices" data-title="Device Status" class="page">
+        <section class="section"><div class="head"><h2>Device Status</h2><span class="muted">Read-only status list. Connect/control actions live in BMS Control and PCS Control.</span><div class="toolbar"><input id="deviceFilter" placeholder="Filter device..." oninput="renderDevices()" /><select id="typeFilter" onchange="renderDevices()"><option value="all">All</option><option value="BMS">BMS</option><option value="PCS">PCS</option></select><span class="muted" id="deviceCount"></span></div></div><div class="scroll"><table><thead><tr><th>Type</th><th>Name</th><th>Connection</th><th>Status</th><th>Errors</th><th>Latency</th><th>Last message</th></tr></thead><tbody id="devices"></tbody></table></div></section>
         <section class="section"><div class="head"><h2>Selected Device Snapshot</h2><span class="muted" id="selectedDeviceTitle">Click a device row</span></div><div class="content"><pre id="deviceSnapshot">-</pre></div></section>
       </section>
 
@@ -4206,8 +4235,8 @@ def _runtime_dashboard_html() -> str:
               <button onclick="downloadProjectConfig()">Download Project JSON</button>
               <button onclick="validateProjectConfig()">Validate Project</button>
             </div>
-            <div class="grid2">
-              <section>
+            <div class="quick-add-grid">
+              <section class="quick-add-card">
                 <h2>BMS Quick Add / Update</h2>
                 <div class="toolbar" style="margin:8px 0; flex-wrap:wrap">
                   <input id="bmsCfgName" placeholder="BMS name e.g. BESS1" />
@@ -4220,7 +4249,7 @@ def _runtime_dashboard_html() -> str:
                   <button onclick="removeBmsConfig()">Remove BMS</button>
                 </div>
               </section>
-              <section>
+              <section class="quick-add-card">
                 <h2>PCS Quick Add / Update</h2>
                 <div class="toolbar" style="margin:8px 0; flex-wrap:wrap">
                   <input id="pcsCfgName" placeholder="PCS name e.g. PCS-1" />
@@ -4281,6 +4310,7 @@ def _runtime_dashboard_html() -> str:
               <button onclick="bmsQuickCommand('power_on')">0381 Power On</button>
               <button onclick="bmsQuickCommand('power_off')">0381 Power Off</button>
               <button onclick="bmsQuickCommand('clear_fault')">Clear Fault</button>
+              <button onclick="bmsClearFaultAll()">Clear Fault All Online</button>
               <button onclick="bmsQuickCommand('write_038b')">Write 038B=2</button>
             </div>
             <div class="toolbar" style="margin-bottom:10px; flex-wrap:wrap">
@@ -4289,8 +4319,10 @@ def _runtime_dashboard_html() -> str:
               <button onclick="bms038b(true)">Start 038B Cycle</button>
               <button onclick="bms038b(false)">Stop 038B Cycle</button>
             </div>
+            <div id="bmsHeartbeatStatus" class="command-feedback">Heartbeat idle. Start heartbeat to send EMS heartbeat periodically.</div>
           </div></section>
         </section>
+        <section class="section"><div class="head"><h2>BMS Live Devices</h2><span class="muted" id="bmsControlCount"></span></div><div class="scroll"><table><thead><tr><th>Name</th><th>Connection</th><th>SOC</th><th>Voltage</th><th>Current</th><th>Power</th><th>Status</th><th>Updated</th><th>Last Message</th><th>Action</th></tr></thead><tbody id="bmsControlRows"></tbody></table></div></section>
         <section class="section"><div class="head"><h2>BMS Control Register Panel</h2><span class="muted">PySide-style flattened writable register controls. Values are queued through BMS worker and audited.</span></div>
           <div class="content">
             <div class="toolbar" style="margin-bottom:10px; flex-wrap:wrap">
@@ -4315,7 +4347,6 @@ def _runtime_dashboard_html() -> str:
             <button onclick="bmsRtcWrite()">Write RTC</button>
           </div>
         </div></section>
-        <section class="section"><div class="head"><h2>BMS Live Devices</h2><span class="muted" id="bmsControlCount"></span></div><div class="scroll"><table><thead><tr><th>Name</th><th>Connection</th><th>Status</th><th>Errors</th><th>Latest Values</th><th>Last Message</th><th>Action</th></tr></thead><tbody id="bmsControlRows"></tbody></table></div></section>
         <section class="section"><div class="head"><h2>CSV / Soak / Operation Log</h2><span class="muted">Kept here because these were originally operated from the control UI.</span></div><div class="content">
           <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap">
             <button onclick="csvBms(true)">Start BMS CSV</button><button onclick="csvBms(false)">Stop BMS CSV</button><button onclick="csvPcs(true)">Start PCS CSV</button><button onclick="csvPcs(false)">Stop PCS CSV</button><button onclick="loadCsvStatus()">Refresh CSV</button>
@@ -4382,7 +4413,8 @@ def _runtime_dashboard_html() -> str:
         </section>
         <section class="section"><div class="head"><h2>PCS Devices</h2><span class="muted" id="pcsCount"></span></div><div class="scroll"><table><thead><tr><th>Name</th><th>Connection</th><th>Status</th><th>Errors</th><th>Latest values</th><th>Last message</th><th>Action</th></tr></thead><tbody id="pcsRows"></tbody></table></div></section>
       </section>
-      <section id="page-strategy" data-title="Strategy Center" class="page">
+      
+        <section class="section"><div class="head"><h2>PCS Alarms / Faults</h2><span class="muted">Derived from PCS runtime state, latest snapshot and Alarm Center.</span></div><div class="scroll"><table><thead><tr><th>PCS</th><th>Severity</th><th>Status</th><th>Message</th></tr></thead><tbody id="pcsAlarmRows"></tbody></table></div></section><section id="page-strategy" data-title="Strategy Center" class="page">
         <section class="section"><div class="head"><h2>Strategy Center</h2><span class="muted">Profile strategy, cluster runtime, safety gates and recent strategy commands.</span><div class="toolbar"><button onclick="loadStrategyCenter()">Refresh Strategy Center</button><a class="btn" href="/api/strategy-center" target="_blank">JSON</a></div></div>
           <div class="cards" id="strategyCards"></div>
           <div class="content"><pre id="strategyIssuesBox">-</pre></div>
@@ -4419,7 +4451,7 @@ def _runtime_dashboard_html() -> str:
               <button data-tab="joint" onclick="showAnalyzerTab('joint')">Joint Analysis</button>
               <button data-tab="history" onclick="showAnalyzerTab('history')">History / Export</button>
             </div>
-            <div id="analyzer-upload" class="subpage active">
+            <div id="analyzerVisualSummary" class="analyzer-visual-grid"><div class="analysis-step"><h3>1 Upload</h3><div class="muted">Upload ASC, DBC, PCAP/PCAPNG, CSV and mapping.json explicitly.</div></div><div class="analysis-step"><h3>2 Select</h3><div class="muted">Analysis pages read the uploaded session files from dropdowns.</div></div><div class="analysis-step"><h3>3 Analyze</h3><div class="muted">Run Modbus, CAN or Joint analysis and review evidence/history.</div></div></div><div id="analyzer-upload" class="subpage active">
               <div class="analyzer-upload-grid">
                 <div class="upload-card"><h3>ASC CAN Log</h3><input id="anAscFile" type="file" accept=".asc" /><button onclick="uploadAnalyzerFile('asc','anAscFile','anAscPath')">Upload ASC</button><div class="muted small">CAN log source.</div></div>
                 <div class="upload-card"><h3>DBC</h3><input id="anDbcFile" type="file" accept=".dbc" /><button onclick="uploadAnalyzerFile('dbc','anDbcFile','anDbcPath')">Upload DBC</button><div class="muted small">Must be selected manually.</div></div>
@@ -4745,6 +4777,46 @@ function cardsHtml(summary, s){
     ['Soak test', soaking ? 'Running' : 'Idle', soaking ? 'ok' : ''],
   ].map(([l,v,c]) => `<div class="card"><div class="label">${esc(l)}</div><div class="value ${c}">${esc(v)}</div></div>`).join('');
 }
+
+function numVal(v){ const n=Number(v); return Number.isFinite(n)?n:null; }
+function fmtMetric(v, suffix='', digits=1){ const n=numVal(v); if(n===null) return esc(v ?? '-'); return esc(n.toFixed(digits).replace(/\.0$/,'')) + esc(suffix); }
+function bmsStatusLabel(raw){
+  const v = String(raw ?? '').trim();
+  const n = Number(v);
+  if(Number.isFinite(n)){
+    const map = {1:'Normal',2:'Full Charge',3:'Full Discharge',4:'Warning',5:'Fault'};
+    return map[n] || `Unknown(${n})`;
+  }
+  const l=v.toLowerCase();
+  if(!l) return '-';
+  if(l.includes('fault') || l.includes('alarm')) return 'Fault';
+  if(l.includes('warn')) return 'Warning';
+  if(l.includes('full') && l.includes('charge')) return 'Full Charge';
+  if(l.includes('full') && l.includes('discharge')) return 'Full Discharge';
+  if(l.includes('normal') || l.includes('ready') || l.includes('online') || l.includes('running')) return 'Normal';
+  return v;
+}
+function bmsStatusClass(label){
+  const l=String(label||'').toLowerCase();
+  if(l.includes('fault')) return 'bad';
+  if(l.includes('warning')) return 'warn';
+  if(l.includes('full')) return 'accent';
+  if(l.includes('normal')) return 'ok';
+  return '';
+}
+function bmsStatusFromDevice(d, vals){
+  return bmsStatusLabel(bmsMetric(vals,['bms_status','system_status','status','state','work_status','running_status']) || d.bms_status || d.work_status || d.state || d.status_code || d.status);
+}
+function metricFromDevice(d, vals, keys){ return bmsMetric(vals, keys) ?? d[keys[0]] ?? '-'; }
+function dashboardBar(label, value, total, cls=''){
+  const t=Math.max(Number(total)||0,0); const v=Math.max(Number(value)||0,0); const pct=t?Math.max(0,Math.min(100,(v/t)*100)):0;
+  return `<div class="bar-row"><div class="bar-top"><span>${esc(label)}</span><b>${esc(v)}/${esc(t)}</b></div><div class="bar-track"><div class="bar-fill ${esc(cls)}" style="width:${pct}%"></div></div></div>`;
+}
+function dashboardSeverityBar(label, count, total, cls=''){
+  const t=Math.max(Number(total)||0,0); const v=Math.max(Number(count)||0,0); const pct=t?Math.max(4,Math.min(100,(v/t)*100)):0;
+  return `<div class="bar-row"><div class="bar-top"><span>${esc(label)}</span><b>${esc(v)}</b></div><div class="bar-track"><div class="bar-fill ${esc(cls)}" style="width:${pct}%"></div></div></div>`;
+}
+
 function deviceRows(){ const ds=(SNAP||{}).device_states||{}; const rows=[]; for(const [typ, items] of Object.entries({BMS:ds.bms||{}, PCS:ds.pcs||{}})){ Object.values(items).forEach(d=>rows.push({...d, _type:typ})); } return rows.sort((a,b)=>String(a._type+a.name).localeCompare(String(b._type+b.name))); }
 
 
@@ -5208,7 +5280,8 @@ function bmsHvByName(device, mode){ if(!device) return; const opts=bmsHvOptions(
 function bmsHv(mode){ const device=opsBmsName(); if(!device){ $('opsCommandResult').innerHTML='<span class="bad">Select a BMS first.</span>'; return; } return bmsHvByName(device, mode); }
 function bmsHvAll(mode){ const opts=bmsHvOptions(); const note=opts.ignore_pcs_precheck?' (BMS-only / ignore PCS precheck)':''; if(!requireExecute(`Send HV ${mode.toUpperCase()} workflow to all online BMS${note}?`)) return; postJson('/api/bms/hv-all', {mode, ...opts}, 'opsCommandResult'); }
 function bmsHvScoped(mode){ return bmsScope()==='single' ? bmsHv(mode) : bmsHvAll(mode); }
-function bmsHeartbeat(start){ postJson(start?'/api/bms/heartbeat/start-all':'/api/bms/heartbeat/stop-all', {}, 'opsCommandResult'); }
+async function bmsHeartbeat(start){ const box=$('bmsHeartbeatStatus'); if(box) box.innerHTML=start?'<span class="ok">Heartbeat start command sent. Periodic heartbeat is being queued by Runtime.</span>':'<span class="warn">Heartbeat stop command sent.</span>'; const data=await postJson(start?'/api/bms/heartbeat/start-all':'/api/bms/heartbeat/stop-all', {}, 'opsCommandResult'); if(box) box.innerHTML=(data.ok!==false?(start?'<span class="ok">Heartbeat active / start acknowledged.</span>':'<span class="warn">Heartbeat stopped / stop acknowledged.</span>'):'<span class="bad">Heartbeat command failed.</span>')+' <code>'+esc(data.command_id||data.status||'')+'</code>'; }
+function bmsClearFaultAll(){ if(!requireExecute('Clear fault on all online BMS?')) return; postJson('/api/bms/command', {scope:'all_online', command:'clear_fault', confirm_text:'EXECUTE'}, 'opsCommandResult'); }
 function bms038b(start){ postJson(start?'/api/bms/038b/start':'/api/bms/038b/stop', {}, 'opsCommandResult'); }
 function parseAddrForApi(v){ const t=String(v||'').trim(); return t.toLowerCase().startsWith('0x') ? t : Number(t); }
 function fillRtcNow(){ const d=new Date(); $('rtcYear').value=d.getFullYear(); $('rtcMonth').value=d.getMonth()+1; $('rtcDay').value=d.getDate(); $('rtcHour').value=d.getHours(); $('rtcMinute').value=d.getMinutes(); $('rtcSecond').value=d.getSeconds(); }
@@ -5221,7 +5294,29 @@ const BMS_PRESET_REGS=[
 function renderBmsPresetRegisters(){ const tb=$('bmsPresetRows'); if(!tb) return; tb.innerHTML=BMS_PRESET_REGS.map((r,i)=>`<tr><td><code>${r[0]}</code></td><td>${esc(r[1])}</td><td><input id="bmsPresetVal${i}" type="number" value="${esc(r[2])}" /></td><td><button onclick="setBmsManual('${r[0]}','bmsPresetVal${i}')">Use</button></td><td><button onclick="bmsPresetWrite('${r[0]}','bmsPresetVal${i}')">Write</button></td></tr>`).join(''); }
 function setBmsManual(addr,inputId){ $('bmsWriteAddress').value=addr; $('bmsWriteValue').value=$(inputId).value; }
 function bmsPresetWrite(addr,inputId){ $('bmsWriteAddress').value=addr; $('bmsWriteValue').value=$(inputId).value; bmsRegisterWrite(); }
-function renderBmsControl(){ if(!SNAP) return; const rows=bmsRows(); const online=rows.filter(d=>d.online || d.connection==='online').length; if($('bmsControlCards')) $('bmsControlCards').innerHTML=[['BMS Total',rows.length,''],['Online',online,online===rows.length?'ok':'warn'],['Running',((SNAP.workers||{}).bms_running||[]).length,'accent'],['Errors',rows.filter(d=>d.error||d.errors).length,'bad']].map(([l,v,c])=>`<div class="card"><div class="label">${esc(l)}</div><div class="value ${c}">${esc(v)}</div></div>`).join(''); if($('bmsControlCount')) $('bmsControlCount').textContent=`${rows.length} BMS`; if($('bmsControlRows')) $('bmsControlRows').innerHTML=rows.map(d=>{ const vals=d.latest_values||d.snapshot||{}; const isSel=$('opsBmsDevice') && $('opsBmsDevice').value===d.name; return `<tr class="${isSel?'selected-row':''}" onclick="if($('opsBmsDevice')){$('opsBmsDevice').value='${esc(d.name)}'; renderBmsControl(); renderBmsPresetRegisters();}"><td>${esc(d.name)}</td><td>${pill(d.connection||d.status||'')}</td><td>${esc(d.status||'')}</td><td>${esc(d.errors||0)}</td><td><code>${esc(JSON.stringify(vals).slice(0,260))}</code></td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','start')">Connect</button> <button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','stop')">Disconnect</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','on')">HV ON</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','off')">HV OFF</button></td></tr>`; }).join('') || '<tr><td colspan="7" class="muted">No BMS devices</td></tr>'; }
+function bmsMetric(vals, keys){ vals=vals||{}; for(const k of keys){ if(vals[k]!==undefined&&vals[k]!==null&&vals[k]!=='' ){ return vals[k]; } } return '-'; }
+function renderBmsControl(){
+  if(!SNAP) return;
+  const rows=bmsRows();
+  const online=rows.filter(d=>d.online || d.connection==='online').length;
+  const statusCounts={normal:0,fullCharge:0,fullDischarge:0,warning:0,fault:0,unknown:0};
+  rows.forEach(d=>{ const vals=d.latest_values||d.snapshot||{}; const label=bmsStatusFromDevice(d, vals); const l=String(label).toLowerCase(); if(l.includes('fault')) statusCounts.fault++; else if(l.includes('warning')) statusCounts.warning++; else if(l.includes('full charge')) statusCounts.fullCharge++; else if(l.includes('full discharge')) statusCounts.fullDischarge++; else if(l.includes('normal')) statusCounts.normal++; else statusCounts.unknown++; });
+  if($('bmsControlCards')) $('bmsControlCards').innerHTML=[
+    ['BMS Total',rows.length,''],['Online',online,online===rows.length?'ok':'warn'],['Normal',statusCounts.normal,'ok'],['Warning/Fault',statusCounts.warning+statusCounts.fault,(statusCounts.warning+statusCounts.fault)?'bad':'ok']
+  ].map(([l,v,c])=>`<div class="card"><div class="label">${esc(l)}</div><div class="value ${c}">${esc(v)}</div></div>`).join('');
+  if($('bmsControlCount')) $('bmsControlCount').textContent=`${rows.length} BMS`;
+  if($('bmsControlRows')) $('bmsControlRows').innerHTML=rows.map(d=>{
+    const vals=d.latest_values||d.snapshot||{};
+    const isSel=$('opsBmsDevice') && $('opsBmsDevice').value===d.name;
+    const soc=metricFromDevice(d, vals, ['soc','SOC','soc_value','system_soc']);
+    const voltage=metricFromDevice(d, vals, ['voltage','system_voltage','total_voltage','dc_voltage','pack_voltage']);
+    const current=metricFromDevice(d, vals, ['current','system_current','dc_current','pack_current']);
+    const power=metricFromDevice(d, vals, ['power','active_power','dc_power','system_power']);
+    const statusLabel=bmsStatusFromDevice(d, vals);
+    const stClass=bmsStatusClass(statusLabel);
+    return `<tr class="${isSel?'selected-row':''}" onclick="if($('opsBmsDevice')){$('opsBmsDevice').value='${esc(d.name)}'; renderBmsControl(); renderBmsPresetRegisters();}"><td>${esc(d.name)}</td><td>${pill(d.connection||'')}</td><td>${fmtMetric(soc,'%',1)}</td><td>${fmtMetric(voltage,' V',1)}</td><td>${fmtMetric(current,' A',1)}</td><td>${fmtMetric(power,' kW',1)}</td><td><span class="pill ${esc(stClass)}">${esc(statusLabel)}</span></td><td>${esc(d.updated_at||d.last_update||d.last_seen||'-')}</td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','start')">Connect</button> <button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','stop')">Disconnect</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','on')">HV ON</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','off')">HV OFF</button></td></tr>`;
+  }).join('') || '<tr><td colspan="10" class="muted">No BMS devices</td></tr>';
+}
 async function csvBms(start){ const device=opsBmsName(); const payload=device?{devices:[device]}:{devices:[]}; const data=await postJson(start?'/api/csv/bms/start':'/api/csv/bms/stop', payload, 'opsCommandResult'); $('opsCsvStatus').textContent=JSON.stringify(data.recording||data, null, 2); }
 async function csvPcs(start){ const data=await postJson(start?'/api/csv/pcs/start':'/api/csv/pcs/stop', {devices:[]}, 'opsCommandResult'); $('opsCsvStatus').textContent=JSON.stringify(data.recording||data, null, 2); }
 async function soakStart(){ const label=$('soakLabel').value||'field-soak'; const interval_s=parseFloat($('soakInterval').value||'60'); const data=await postJson('/api/soak/start', {label, interval_s}, 'opsCommandResult'); $('soakOpsBox').textContent=JSON.stringify(data, null, 2); }
@@ -5231,7 +5326,18 @@ async function loadOperationLog(){ try{ const r=await fetch('/api/logs/operation
 function populatePcsSelected(){ if(!SNAP) return; const sel=$('pcsSelected'); if(!sel) return; const old=sel.value; const names=pcsRows().map(x=>x.name).filter(Boolean).sort(); sel.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join(''); if(names.includes(old)) sel.value=old; renderPcsCards(); }
 function selectedPcs(){ return $('pcsSelected') ? $('pcsSelected').value : ''; }
 function renderPcsCards(){ const rows=pcsRows(); const online=rows.filter(d=>d.online || d.connection==='online').length; if($('pcsControlCards')) $('pcsControlCards').innerHTML=[['PCS Total',rows.length,''],['Online',online,online===rows.length?'ok':'warn'],['Running',((SNAP?.workers||{}).pcs_running||[]).length,'accent'],['Errors',rows.filter(d=>d.error||d.errors).length,'bad']].map(([l,v,c])=>`<div class="card"><div class="label">${esc(l)}</div><div class="value ${c}">${esc(v)}</div></div>`).join(''); }
-function renderPCS(){ if(!SNAP) return; populatePcsSelected(); const rows=pcsRows(); $('pcsCount').textContent=`${rows.length} PCS`; $('pcsRows').innerHTML=rows.map(d=>{ const vals=d.latest_values||{}; const isSel=selectedPcs()===d.name; return `<tr class="${isSel?'selected-row':''}" onclick="if($('pcsSelected')){$('pcsSelected').value='${esc(d.name)}'; renderPCS();}"><td>${esc(d.name)}</td><td>${pill(d.connection)}</td><td>${esc(d.status||'')}</td><td>${esc(d.errors||0)}</td><td><code>${esc(JSON.stringify(vals).slice(0,260))}</code></td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','connect')">Connect</button> <button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','stop')">Disconnect</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','start')">Start</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','stop')">Stop</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','close_dc_breaker')">Close DC</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','open_dc_breaker')">Open DC</button></td></tr>`}).join('') || '<tr><td colspan="7" class="muted">No PCS devices</td></tr>'; renderPcsCards(); }
+function renderPCS(){ if(!SNAP) return; populatePcsSelected(); const rows=pcsRows(); $('pcsCount').textContent=`${rows.length} PCS`; $('pcsRows').innerHTML=rows.map(d=>{ const vals=d.latest_values||{}; const isSel=selectedPcs()===d.name; return `<tr class="${isSel?'selected-row':''}" onclick="if($('pcsSelected')){$('pcsSelected').value='${esc(d.name)}'; renderPCS();}"><td>${esc(d.name)}</td><td>${pill(d.connection)}</td><td>${esc(d.status||'')}</td><td>${esc(d.errors||0)}</td><td><div><b>SOC</b> ${esc(bmsMetric(vals,['soc','SOC','soc_value']))}</div><div><b>V</b> ${esc(bmsMetric(vals,['voltage','system_voltage','total_voltage','dc_voltage']))}</div><div><b>I</b> ${esc(bmsMetric(vals,['current','system_current','dc_current']))}</div><div><b>Status</b> ${esc(d.status||bmsMetric(vals,['status','state']))}</div></td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','connect')">Connect</button> <button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','stop')">Disconnect</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','start')">Start</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','stop')">Stop</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','close_dc_breaker')">Close DC</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','open_dc_breaker')">Open DC</button></td></tr>`}).join('') || '<tr><td colspan="7" class="muted">No PCS devices</td></tr>'; renderPcsCards(); }
+
+function renderPcsAlarms(){
+  const tb=$('pcsAlarmRows'); if(!tb) return;
+  const rows=pcsRows().flatMap(d=>{
+    const vals=d.latest_values||d.snapshot||{}; const items=[];
+    if(d.error||d.errors) items.push({name:d.name,severity:'alarm',status:d.status||d.connection||'',message:d.last_message||d.error||`${d.errors} error(s)`});
+    for(const [k,v] of Object.entries(vals||{})){ const kl=String(k).toLowerCase(); if((kl.includes('alarm')||kl.includes('fault')||kl.includes('warning')) && String(v)!=='0' && String(v)!=='false' && String(v)!=='') items.push({name:d.name,severity:kl.includes('alarm')||kl.includes('fault')?'alarm':'warning',status:k,message:String(v)}); }
+    return items;
+  });
+  tb.innerHTML=rows.map(a=>`<tr><td>${esc(a.name)}</td><td>${esc(a.severity)}</td><td>${esc(a.status)}</td><td>${esc(a.message)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No PCS alarm/fault data detected.</td></tr>';
+}
 function pcsConnectAll(){ postJson('/api/pcs/connect-all', {}, 'pcsCommandResult'); }
 function pcsStopAll(){ postJson('/api/pcs/stop-all', {}, 'pcsCommandResult'); }
 function pcsFleetCommand(method){ if(!requireExecute(`Send ${method} to all online PCS?`)) return; postJson('/api/pcs/fleet-command', {method, confirm_text:'EXECUTE'}, 'pcsCommandResult'); }
@@ -5255,7 +5361,39 @@ async function strategyStart(){ const cluster=strategyClusterName(); if(!cluster
 async function strategyStop(){ const cluster=strategyClusterName(); if(!cluster) return; if(!confirm(`Stop strategy for ${cluster}?`)) return; await postJson('/api/strategy/stop', {cluster}, 'strategyCommandResult'); await loadStrategyCenter(); }
 async function strategyStartAll(){ if(!requireExecute('Start strategy for all configured clusters?')) return; await postJson('/api/strategy/start-all', {confirm_text:'EXECUTE'}, 'strategyCommandResult'); await loadStrategyCenter(); }
 async function strategyStopAll(){ if(!confirm('Stop strategy for all configured clusters?')) return; await postJson('/api/strategy/stop-all', {}, 'strategyCommandResult'); await loadStrategyCenter(); }
-function renderOverview(){ if(!SNAP) return; const summary=SNAP.summary||{}; $('cards').innerHTML=cardsHtml(summary,SNAP); $('runtimeSummary').textContent=JSON.stringify({api_schema:SNAP.api_schema, uptime_s:SNAP.uptime_s, workers:SNAP.workers, summary:SNAP.summary, recording:SNAP.recording}, null, 2); $('soakSummary').textContent=JSON.stringify(SNAP.soak_test||{}, null, 2); }
+function renderOverview(){
+  if(!SNAP) return;
+  const summary=SNAP.summary||{};
+  if($('cards')) $('cards').innerHTML=cardsHtml(summary,SNAP);
+  const alarms=overviewAlarmItems();
+  const workers=SNAP.workers||{};
+  const bmsTotal=Number(summary.bms_total||0), bmsOnline=Number(summary.bms_online||0);
+  const pcsTotal=Number(summary.pcs_total||0), pcsOnline=Number(summary.pcs_online||0);
+  const alarmCount=alarms.filter(a=>String(a.severity||'').toLowerCase().includes('alarm')).length;
+  const warnCount=alarms.filter(a=>String(a.severity||'').toLowerCase().includes('warn')).length;
+  const siteState = alarmCount ? 'Fault' : (warnCount ? 'Warning' : (bmsOnline+pcsOnline>0 ? 'Running' : 'Standby'));
+  const stateClass = siteState==='Fault'?'bad':(siteState==='Warning'?'warn':(siteState==='Running'?'ok':''));
+  const dashboardHtml = `
+    <div class="dashboard-cards">
+      <div class="metric-card hero"><div class="metric-label">Site state</div><div class="metric-value ${stateClass}">${esc(siteState)}</div><div class="metric-foot">Uptime ${esc(SNAP.uptime_s||0)}s</div></div>
+      <div class="metric-card"><div class="metric-label">BMS online</div><div class="metric-value ${bmsOnline===bmsTotal?'ok':'warn'}">${esc(bmsOnline)}/${esc(bmsTotal)}</div><div class="metric-foot">Running ${(workers.bms_running||[]).length}</div></div>
+      <div class="metric-card"><div class="metric-label">PCS online</div><div class="metric-value ${pcsOnline===pcsTotal?'ok':'warn'}">${esc(pcsOnline)}/${esc(pcsTotal)}</div><div class="metric-foot">Running ${(workers.pcs_running||[]).length}</div></div>
+      <div class="metric-card"><div class="metric-label">Active issues</div><div class="metric-value ${alarms.length?'bad':'ok'}">${esc(alarms.length)}</div><div class="metric-foot">Alarm ${alarmCount} · Warning ${warnCount}</div></div>
+      <div class="metric-card"><div class="metric-label">CSV</div><div class="metric-value">${esc(csvStatusText())}</div><div class="metric-foot">Recorder status</div></div>
+      <div class="metric-card"><div class="metric-label">Strategy</div><div class="metric-value accent">${esc((workers.strategies||[]).length)}</div><div class="metric-foot">Active strategy workers</div></div>
+    </div>
+    <div class="dashboard-charts">
+      <div class="chart-card"><div class="chart-title">Device online distribution</div>${dashboardBar('BMS online', bmsOnline, bmsTotal, 'ok')}${dashboardBar('PCS online', pcsOnline, pcsTotal, 'accent')}</div>
+      <div class="chart-card"><div class="chart-title">Alarm / warning distribution</div>${dashboardSeverityBar('Alarm', alarmCount, Math.max(alarms.length,1), 'bad')}${dashboardSeverityBar('Warning', warnCount, Math.max(alarms.length,1), 'warn')}${dashboardSeverityBar('Normal', Math.max((bmsTotal+pcsTotal)-alarms.length,0), Math.max(bmsTotal+pcsTotal,1), 'ok')}</div>
+      <div class="chart-card"><div class="chart-title">Runtime activity</div>${dashboardSeverityBar('BMS workers', (workers.bms_running||[]).length, Math.max(bmsTotal,1), 'ok')}${dashboardSeverityBar('PCS workers', (workers.pcs_running||[]).length, Math.max(pcsTotal,1), 'accent')}${dashboardSeverityBar('Strategies', (workers.strategies||[]).length, Math.max((SNAP.clusters||[]).length,1), 'warn')}</div>
+    </div>`;
+  if($('overviewDashboard')) $('overviewDashboard').innerHTML=dashboardHtml;
+  if($('overviewAlarmRows')) $('overviewAlarmRows').innerHTML=alarms.slice(0,12).map(a=>`<tr><td>${esc(a.severity||'')}</td><td>${esc(a.area||a.kind||'')}</td><td>${esc(a.device||'')}</td><td>${esc(a.message||a.key||a.status||'')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No active runtime alarms or issues.</td></tr>';
+  if($('runtimeSummary')) $('runtimeSummary').textContent=JSON.stringify({api_schema:SNAP.api_schema, uptime_s:SNAP.uptime_s, workers:SNAP.workers, summary:SNAP.summary, recording:SNAP.recording}, null, 2);
+  if($('soakSummary')) $('soakSummary').textContent=JSON.stringify(SNAP.soak_test||{}, null, 2);
+}
+function csvStatusText(){ const r=SNAP?.recording||{}; const on=[]; if(r.bms_csv) on.push('BMS'); if(r.pcs_csv) on.push('PCS'); return on.length?on.join('+'):'idle'; }
+function overviewAlarmItems(){ const out=[]; const ds=(SNAP?.device_states)||{}; for(const [kind,map] of Object.entries({bms:ds.bms||{}, pcs:ds.pcs||{}})){ for(const [name,d] of Object.entries(map||{})){ if(d.error||d.errors){ out.push({severity:'alarm',area:kind,device:name,message:d.last_message||d.error||`${d.errors} error(s)`}); } if(d.online===false||d.connection==='offline'){ out.push({severity:'warning',area:kind,device:name,message:'offline'}); } } } return out; }
 function renderDevices(){ if(!SNAP) return; const q=($('deviceFilter')?.value||'').toLowerCase(); const tf=$('typeFilter')?.value||'all'; const rows=deviceRows().filter(d=>(tf==='all'||d._type===tf) && (!q || String(d.name).toLowerCase().includes(q) || String(d.connection).toLowerCase().includes(q) || String(d.last_message).toLowerCase().includes(q))); $('devices').innerHTML=rows.map(d=>{ const isSel=SELECTED_DEVICE.kind===d._type && SELECTED_DEVICE.name===d.name; return `<tr class="clickable-row ${isSel?'selected-row':''}" onclick="selectDevice('${esc(d._type)}','${esc(d.name)}')"><td>${esc(d._type)}</td><td>${esc(d.name)}</td><td>${pill(d.connection)}</td><td>${esc(d.status)}</td><td>${esc(d.errors||0)}</td><td>${esc(d.last_latency_ms||0)}</td><td>${esc(d.last_message||'')}</td></tr>`; }).join('') || '<tr><td colspan="7" class="muted">No devices</td></tr>'; $('deviceCount').textContent=`${rows.length} rows`; }
 async function selectDevice(kind,name){ SELECTED_DEVICE={kind,name}; renderDevices(); if($('selectedDeviceTitle')) $('selectedDeviceTitle').textContent=`${kind} ${name}`; if($('deviceSnapshot')) $('deviceSnapshot').textContent='Loading...'; try{ const r=await fetch(`/api/device/${kind.toLowerCase()}/${encodeURIComponent(name)}/snapshot`, {cache:'no-store'}); if($('deviceSnapshot')) $('deviceSnapshot').textContent=JSON.stringify(await r.json(), null, 2); }catch(e){ if($('deviceSnapshot')) $('deviceSnapshot').textContent=String(e); } }
 function populateAlarmDevices(){ if(!SNAP) return; const sel=$('alarmDevice'); const old=sel.value; const bms=Object.keys(((SNAP.device_states||{}).bms)||{}).sort(); sel.innerHTML=bms.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join(''); if(bms.includes(old)) sel.value=old; }
@@ -5419,7 +5557,7 @@ async function loadSiteConfig(){ $('siteConfigResult').textContent='Loading...';
 function downloadSiteConfig(){ const text=$('siteConfigEditor').value||'{}'; const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text], {type:'application/json'})); a.download='site_config.runtime_export.json'; a.click(); URL.revokeObjectURL(a.href); }
 async function saveSiteConfigFromEditor(){ if(!confirm('Save the JSON editor content to Runtime site config?')) return; try{ const cfg=JSON.parse($('siteConfigEditor').value||'{}'); await postJson('/api/site/config', cfg, 'siteConfigResult'); }catch(e){ $('siteConfigResult').innerHTML=`<span class="bad">Invalid JSON: ${esc(e)}</span>`; } }
 async function siteSaveRuntime(){ if(!confirm('Persist current runtime site config to disk?')) return; await postJson('/api/site/save', {}, 'siteConfigResult'); }
-const CURVES={};
+let CURVES={};
 let CURVE_PLAYBACK=null;
 function resetCurveBuffer(){ for(const k of Object.keys(CURVES)) delete CURVES[k]; CURVE_PLAYBACK=null; if($('curveCsvStatus')) $('curveCsvStatus').textContent='Cleared.'; renderCurve(); }
 function curveValueFromSnapshot(snap,sig){ if(!snap) return NaN; const aliases={soc:['soc','SOC','soc_value'], voltage:['voltage','system_voltage','total_voltage','dc_voltage'], current:['current','system_current','dc_current'], power:['power','power_kw','actual_power','active_power'], actual_power:['actual_power','active_power','power_kw','power'], reactive_power:['reactive_power','q','q_kvar'], temperature:['temperature','max_temperature','temp']}; for(const k of (aliases[sig]||[sig])){ if(snap[k]!==undefined){ const v=Number(snap[k]); if(Number.isFinite(v)) return v; } } return NaN; }
@@ -5427,8 +5565,8 @@ function curveSeriesList(){ if(CURVE_PLAYBACK) return CURVE_PLAYBACK; return Obj
 async function loadLiveCurves(){ if(CURVE_PLAYBACK) return; const type=$('curveDeviceType')?.value||'all'; const dev=$('curveDevice')?.value||''; const sig=$('curveSignal')?.value||'soc'; const multi=$('curveMulti')?.checked; const maxSamples=Math.max(60, Math.min(10000, parseInt($('curveMaxSamples')?.value||'600'))); try{ const url=`/api/curves/live?signal=${encodeURIComponent(sig)}&device_type=${encodeURIComponent(String(type).toLowerCase())}&device=${encodeURIComponent(dev)}&multi=${multi?'true':'false'}&limit=${maxSamples}`; const r=await fetch(url,{cache:'no-store'}); const j=await r.json(); CURVES={}; (j.series||[]).forEach(s=>{ CURVES[s.name]={name:s.name,data:s.data||[]}; }); }catch(e){ /* fallback to compact snapshot below */ } }
 async function renderCurve(){ if(!SNAP) return; const sel=$('curveDevice'); if(!sel) return; const type=$('curveDeviceType')?.value||'all'; const names=deviceRows().filter(d=>type==='all'||d._type===type).map(d=>d.name).sort(); const old=sel.value; if(!sel.options.length || names.indexOf(old)<0){ sel.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join(''); if(names.includes(old)) sel.value=old; }
   await loadLiveCurves();
-  const c=$('curveCanvas'), ctx=c.getContext('2d'), series=curveSeriesList().filter(s=>(s.data||[]).length); ctx.clearRect(0,0,c.width,c.height); ctx.strokeStyle='#374151'; ctx.lineWidth=1; for(let i=0;i<6;i++){ const y=i*c.height/5; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(c.width,y); ctx.stroke(); }
-  const all=series.flatMap(s=>s.data.map(p=>Number(p.y))).filter(Number.isFinite); ctx.fillStyle='#9ca3af'; ctx.fillText(`server-cache series=${series.length} samples=${all.length}`, 14, 20); if(all.length<1){ if($('curveStatsRows')) $('curveStatsRows').innerHTML='<tr><td colspan="5" class="muted">No curve samples yet.</td></tr>'; return; }
+  const c=$('curveCanvas'), ctx=c.getContext('2d'); let series=curveSeriesList().filter(s=>(s.data||[]).length); ctx.clearRect(0,0,c.width,c.height); ctx.strokeStyle='#374151'; ctx.lineWidth=1; for(let i=0;i<6;i++){ const y=i*c.height/5; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(c.width,y); ctx.stroke(); }
+  if(!series.length && !CURVE_PLAYBACK){ const sig=$('curveSignal')?.value||'soc'; const type=$('curveDeviceType')?.value||'all'; const dev=$('curveDevice')?.value||''; const multi=$('curveMulti')?.checked; const rows=deviceRows().filter(d=>(type==='all'||d._type===type) && (multi||!dev||d.name===dev)); rows.forEach(d=>{ const y=curveValueFromSnapshot(d.latest_values||d.snapshot||d, sig); if(Number.isFinite(y)) CURVES[d.name]={name:d.name,data:[{t:Date.now(),y}]}; }); series=curveSeriesList().filter(s=>(s.data||[]).length); } const all=series.flatMap(s=>s.data.map(p=>Number(p.y))).filter(Number.isFinite); ctx.fillStyle='#9ca3af'; ctx.fillText(`server-cache series=${series.length} samples=${all.length}`, 14, 20); if(all.length<1){ if($('curveStatsRows')) $('curveStatsRows').innerHTML='<tr><td colspan="5" class="muted">No curve samples yet.</td></tr>'; return; }
   let min=Math.min(...all), max=Math.max(...all); if(min===max){min-=1;max+=1;} const palette=['#60a5fa','#34d399','#fbbf24','#f87171','#c084fc','#22d3ee','#fb7185','#a3e635'];
   series.forEach((s,si)=>{ const arr=s.data; if(arr.length<1) return; ctx.strokeStyle=palette[si%palette.length]; ctx.lineWidth=2; ctx.beginPath(); arr.forEach((p,i)=>{ const x=arr.length===1?10:i*(c.width-30)/(arr.length-1)+15; const y=c.height-25-(Number(p.y)-min)*(c.height-55)/(max-min); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.stroke(); ctx.fillStyle=palette[si%palette.length]; ctx.fillText(s.name, 14+(si%4)*230, 40+Math.floor(si/4)*16); });
   ctx.fillStyle='#e5e7eb'; ctx.fillText(`min=${min.toFixed(2)} max=${max.toFixed(2)}`, 14, c.height-8); if($('curveStatsRows')) $('curveStatsRows').innerHTML=series.map(s=>{ const ys=s.data.map(p=>Number(p.y)).filter(Number.isFinite); const mn=Math.min(...ys), mx=Math.max(...ys), last=ys[ys.length-1]; return `<tr><td>${esc(s.name)}</td><td>${ys.length}</td><td>${mn.toFixed(3)}</td><td>${mx.toFixed(3)}</td><td>${Number(last).toFixed(3)}</td></tr>`; }).join(''); }
@@ -5636,10 +5774,11 @@ async function clearAlarmAck(encodedId){ const alarm_id=decodeURIComponent(encod
 async function clearAlarmAckAll(){ if(!confirm('Clear all Alarm Center ACK records?')) return; await postJson('/api/alarm-center/ack/clear', {}, 'alarmCenterRaw'); await loadAlarmCenter(); }
 
 function registerDeviceNames(type){
-  if(type==='pcs') return pcsRows().map(x=>x.name).filter(Boolean).sort();
-  const a=(SNAP?.bms||[]).map(x=>x.name).filter(Boolean);
-  const b=(PROJECT?.bms_devices||[]).map(x=>x.name).filter(Boolean);
-  return Array.from(new Set([...a,...b])).sort();
+  const cfgBms=(PROJECT?.bms_devices||PROJECT?.devices||[]).map(x=>x.name||x.id).filter(Boolean);
+  const cfgPcs=Object.keys(PROJECT?.pcs_configs||{}).concat((PROJECT?.pcs_devices||[]).map(x=>x.name||x.id)).filter(Boolean);
+  if(type==='pcs') return Array.from(new Set([...pcsRows().map(x=>x.name).filter(Boolean), ...cfgPcs])).sort();
+  const live=Object.keys(((SNAP?.device_states||{}).bms)||{}).concat(bmsRows().map(x=>x.name).filter(Boolean));
+  return Array.from(new Set([...live,...cfgBms])).sort();
 }
 function populateRegisterDevices(){
   if(!SNAP) return;
@@ -5687,7 +5826,7 @@ async function loadReleaseCenter(){
     if(box) box.textContent=data.release_notes || JSON.stringify(data,null,2);
   }catch(e){ if(box) box.textContent=String(e); }
 }
-function renderActive(){ if(!SNAP) return; if(CURRENT_PAGE==='runtimecenter') loadRuntimeCenter(); else if(CURRENT_PAGE==='overview') renderOverview(); else if(CURRENT_PAGE==='devices') renderDevices(); else if(CURRENT_PAGE==='project') renderProjectConfig(); else if(CURRENT_PAGE==='ops'){ populateOpsBmsDevices(); renderBmsControl(); renderBmsPresetRegisters(); } else if(CURRENT_PAGE==='pcs'){ populatePcsSelected(); renderPCS(); } else if(CURRENT_PAGE==='strategy') loadStrategyCenter(); else if(CURRENT_PAGE==='analyzer'){ loadAnalyzerFiles(); if(document.querySelector('#analyzer-history.active')) loadDiagnosisHistory(); } else if(CURRENT_PAGE==='registerdebug'){ populateRegisterDevices(); } else if(CURRENT_PAGE==='release'){ loadReleaseCenter(); } else if(CURRENT_PAGE==='health'){ loadHealthMonitor(); } else if(CURRENT_PAGE==='parity'){ loadParityAudit(); } else if(CURRENT_PAGE==='uiactions'){ loadUiActionMatrix(); } else if(CURRENT_PAGE==='lts'){ loadLtsAudit(); } else if(CURRENT_PAGE==='curves') renderCurve(); else if(CURRENT_PAGE==='settings'){ renderSettings(); if(!$('runtimeSettingsRows')?.children.length) loadRuntimeSettings(); } else if(CURRENT_PAGE==='site' && !$('siteConfigEditor').value) loadSiteConfig(); else if(CURRENT_PAGE==='alarmcenter') loadAlarmCenter(); else if(CURRENT_PAGE==='alarms') populateAlarmDevices(); else if(CURRENT_PAGE==='clusters'){ renderClusters(); if(!$('powerMapStatusRows')?.children.length) loadPowerMapStatus(); if(!$('pmEditorRows')?.children.length) loadPowerMapEditor(); } else if(CURRENT_PAGE==='commands') renderCommands(); }
+function renderActive(){ if(!SNAP) return; if(CURRENT_PAGE==='runtimecenter') loadRuntimeCenter(); else if(CURRENT_PAGE==='overview') renderOverview(); else if(CURRENT_PAGE==='devices') renderDevices(); else if(CURRENT_PAGE==='project') renderProjectConfig(); else if(CURRENT_PAGE==='ops'){ populateOpsBmsDevices(); renderBmsControl(); renderBmsPresetRegisters(); } else if(CURRENT_PAGE==='pcs'){ populatePcsSelected(); renderPCS(); } else if(CURRENT_PAGE==='strategy') loadStrategyCenter(); else if(CURRENT_PAGE==='analyzer'){ loadAnalyzerFiles(); if(document.querySelector('#analyzer-history.active')) loadDiagnosisHistory(); } else if(CURRENT_PAGE==='registerdebug'){ populateRegisterDevices(); } else if(CURRENT_PAGE==='release'){ loadReleaseCenter(); } else if(CURRENT_PAGE==='health'){ loadHealthMonitor(); } else if(CURRENT_PAGE==='parity'){ loadParityAudit(); } else if(CURRENT_PAGE==='uiactions'){ loadUiActionMatrix(); } else if(CURRENT_PAGE==='lts'){ loadLtsAudit(); } else if(CURRENT_PAGE==='curves') renderCurve(); else if(CURRENT_PAGE==='settings'){ renderSettings(); if(!$('runtimeSettingsRows')?.children.length) loadRuntimeSettings(); } else if(CURRENT_PAGE==='site' && !$('siteConfigEditor').value) loadSiteConfig(); else if(CURRENT_PAGE==='alarmcenter') loadAlarmCenter(); else if(CURRENT_PAGE==='alarms') populateAlarmDevices(); else if(CURRENT_PAGE==='clusters'){ renderClusters(); if(!$('powerMapStatusRows')?.children.length) loadPowerMapStatus(); if(!$('pmEditorRows')?.children.length) loadPowerMapEditor(); } else if(CURRENT_PAGE==='commands') renderCommands(); updateRuntimeFooter(); }
 
 
 async function loadLtsAudit(){
@@ -5757,6 +5896,14 @@ async function shutdownRuntimeFromWeb(){
   }catch(e){ if(box) box.textContent=String(e); }
 }
 
+
+function updateRuntimeFooter(){
+  const active=document.querySelector('.page.active'); if(!active) return;
+  document.querySelectorAll('.runtime-page-footer').forEach(x=>x.remove());
+  const summary=SNAP?.summary||{}; const div=document.createElement('div'); div.className='runtime-page-footer';
+  div.innerHTML=`<span><b>Runtime</b> ${esc(SNAP?.api_schema||'-')}</span><span><b>Uptime</b> ${esc(SNAP?.uptime_s||0)}s</span><span><b>BMS</b> ${esc(summary.bms_online??0)}/${esc(summary.bms_total??0)}</span><span><b>PCS</b> ${esc(summary.pcs_online??0)}/${esc(summary.pcs_total??0)}</span><span><b>Commands</b> ${esc((SNAP?.command_acks||[]).length)}</span>`;
+  active.appendChild(div);
+}
 async function refreshNow(force=false){ if(!force && document.hidden) return; try{ const endpoint = force && CURRENT_PAGE==='release' ? '/api/snapshot' : '/api/snapshot/compact'; const r=await fetch(endpoint, {cache:'no-store'}); const s=await r.json(); if(!force && SNAP && SNAP.snapshot_id===s.snapshot_id) return; SNAP=s; $('subtitle').innerHTML=`${esc(s.api_schema)} · uptime ${esc(s.uptime_s)}s · ${s.compact?'compact':'full'} snapshot <code>${esc(s.snapshot_id||'-')}</code>`; if(CURRENT_PAGE==='overview') renderOverview(); else renderActive(); }catch(e){ $('subtitle').innerHTML=`<span class="bad">Runtime unavailable: ${esc(e)}</span>`; } }
 setInterval(()=>{ if($('auto').checked && !document.hidden) refreshNow(false); }, 2500);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && $('auto').checked) refreshNow(true); });

@@ -4,10 +4,10 @@ from datetime import datetime
 
 APP_NAME = "ESS-AIO"
 APP_TITLE = "ESS-AIO | Energy Storage System All-in-One Platform"
-APP_VERSION = "9.9.24"
+APP_VERSION = "9.9.26"
 APP_STAGE = "Web EMS 9.x LTS Web Lite Health Check Fix"
 BUILD_DATE = "2026-05-31"
-BUILD_ID = "v9.9.24-web-lite-health-check-fix"
+BUILD_ID = "v9.9.25-lts-field-ux-dashboard-fix"
 PROFILE_SCHEMA_VERSION = 3
 
 
