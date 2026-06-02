@@ -627,6 +627,8 @@ class RuntimeApiBridge(QObject):
             "actual_power": ["actual_power", "active_power", "power_kw", "power"],
             "reactive_power": ["reactive_power", "q", "q_kvar", "reactive_power_kvar"],
             "temperature": ["temperature", "max_temperature", "temp", "max_temp"],
+            "bms_status": ["bms_status", "status", "state", "system_status"],
+            "rack_count": ["number_of_racks", "rack_count", "online_rack_count", "rack_online_count", "racks_online"],
         }
         for key in aliases.get(str(signal), [str(signal)]):
             try:
@@ -650,7 +652,7 @@ class RuntimeApiBridge(QObject):
             task_rows = self._task_status_rows()
             states = self._build_device_states(task_rows)
             now = int(time.time() * 1000)
-            signals = ["soc", "voltage", "current", "power", "actual_power", "reactive_power", "temperature"]
+            signals = ["soc", "voltage", "current", "power", "actual_power", "reactive_power", "temperature", "bms_status", "rack_count"]
             with self._curve_history_lock:
                 for kind in ("bms", "pcs"):
                     for name, state in ((states.get(kind) or {}).items() if isinstance(states, dict) else []):
@@ -2315,10 +2317,35 @@ class RuntimeApiBridge(QObject):
                 except Exception:
                     result[str(name)] = 0
             return result
+        def _rec_paths(mapping: Any) -> dict[str, str]:
+            out: dict[str, str] = {}
+            for name, rec in (mapping or {}).items():
+                try:
+                    inner = getattr(rec, "recorder", rec)
+                    path = getattr(inner, "output_dir", None) or getattr(inner, "path", None) or getattr(inner, "filepath", None)
+                    if path:
+                        out[str(name)] = str(path)
+                except Exception:
+                    pass
+            return out
+        bms_dirs = _rec_paths(getattr(w, "recorders", {}) or {})
+        pcs_dirs = _rec_paths(getattr(w, "pcs_recorders", {}) or {})
+        try:
+            default_bms_dir = str(w.get_profile_path("records"))
+        except Exception:
+            default_bms_dir = str(Path("records"))
+        try:
+            default_pcs_dir = str(w.get_profile_path("pcs_records"))
+        except Exception:
+            default_pcs_dir = str(Path("pcs_records"))
         return {
             "owner": "runtime",
             "bms_csv": sorted(list(getattr(w, "bms_csv_recording_devices", set()) or [])),
             "pcs_csv": sorted(list(getattr(w, "pcs_csv_recording_devices", set()) or [])),
+            "bms_output_dirs": bms_dirs,
+            "pcs_output_dirs": pcs_dirs,
+            "default_bms_output_dir": default_bms_dir,
+            "default_pcs_output_dir": default_pcs_dir,
             "bms_dropped_rows": _dropped(getattr(w, "recorders", {}) or {}),
             "alarm_dropped_rows": _dropped(getattr(w, "alarm_recorders", {}) or {}),
             "pcs_dropped_rows": _dropped(getattr(w, "pcs_recorders", {}) or {}),
@@ -2421,6 +2448,32 @@ class RuntimeApiBridge(QObject):
             except Exception:
                 pass
         return {"ok": True, "stopped": stopped, "recording": self._recording_status()}
+
+    def _read_bms_version_runtime(self, device: str, sbmu_count: int = 1) -> dict[str, Any]:
+        dev_name = str(device or "").strip()
+        if not dev_name:
+            return {"ok": False, "error": "Missing BMS device"}
+        try:
+            cfg = next((d for d in getattr(self.window, "devices", []) or [] if str(d.get("name", "")) == dev_name), None)
+            if not cfg:
+                return {"ok": False, "device": dev_name, "error": f"BMS config not found: {dev_name}"}
+            from .client_factory import create_bms_client
+            client = create_bms_client(cfg, fake_mode=bool(getattr(self.window, "fake_mode", False)))
+            try:
+                if hasattr(client, "connect"):
+                    client.connect()
+                data = client.read_software_version(max(0, int(sbmu_count or 0)))
+            finally:
+                try:
+                    if hasattr(client, "close"):
+                        client.close()
+                    elif hasattr(client, "disconnect"):
+                        client.disconnect()
+                except Exception:
+                    pass
+            return {"ok": True, "device": dev_name, "sbmu_count": int(sbmu_count or 0), "version": data}
+        except Exception as exc:
+            return {"ok": False, "device": dev_name, "error": str(exc)}
 
     def _read_recent_operation_log(self, max_lines: int = 300) -> dict[str, Any]:
         path = Path(self._log_status().get("operation_log_today", ""))
@@ -3882,6 +3935,10 @@ class RuntimeApiBridge(QObject):
                 restore_strategy=bool(kwargs.get("restore_strategy", False)),
             )
 
+        if name == "read_bms_version":
+            result = self._read_bms_version_runtime(str(kwargs.get("device") or ""), int(kwargs.get("sbmu_count") or 1))
+            result.update({"command": name})
+            return result
         if name == "csv_status":
             result = self._recording_status()
             result.update({"ok": True, "command": name})
@@ -4220,6 +4277,7 @@ def _runtime_dashboard_html() -> str:
           <section class="section"><div class="head"><h2>Active Alarms / Issues</h2><button onclick="showPage('alarmcenter')">Open Alarm Center</button></div><div class="scroll"><table><thead><tr><th>Severity</th><th>Area</th><th>Device</th><th>Message</th></tr></thead><tbody id="overviewAlarmRows"></tbody></table></div></section>
           <section class="section"><div class="head"><h2>Runtime Summary</h2></div><div class="content"><pre id="runtimeSummary">-</pre></div></section>
         </div>
+        <section class="section"><div class="head"><h2>Overview Monitoring Curves</h2><span class="muted">Compact trend preview: BMS status and online rack count.</span></div><div class="content"><div class="dashboard-charts" id="overviewTrendCards"></div></div></section>
         <section class="section"><div class="head"><h2>Soak Test</h2><a class="btn" href="/api/soak/status" target="_blank">Open JSON</a></div><div class="content"><pre id="soakSummary">-</pre></div></section>
       </section>
       <section id="page-devices" data-title="Device Status" class="page">
@@ -4323,16 +4381,22 @@ def _runtime_dashboard_html() -> str:
           </div></section>
         </section>
         <section class="section"><div class="head"><h2>BMS Live Devices</h2><span class="muted" id="bmsControlCount"></span></div><div class="scroll"><table><thead><tr><th>Name</th><th>Connection</th><th>SOC</th><th>Voltage</th><th>Current</th><th>Power</th><th>Status</th><th>Updated</th><th>Last Message</th><th>Action</th></tr></thead><tbody id="bmsControlRows"></tbody></table></div></section>
-        <section class="section"><div class="head"><h2>BMS Control Register Panel</h2><span class="muted">PySide-style flattened writable register controls. Values are queued through BMS worker and audited.</span></div>
+        <section class="section"><div class="head"><h2>BMS Version Read</h2><span class="muted">Read MBMU, ETH and selected SBMU version blocks. SBMU01 uses the configured base address; SBMU02+ are base + 0x400 each.</span></div>
           <div class="content">
             <div class="toolbar" style="margin-bottom:10px; flex-wrap:wrap">
-              <select id="bmsWriteScope"><option value="single">selected BMS</option><option value="all_online">all online BMS</option></select>
-              <input id="bmsWriteAddress" value="0x038B" placeholder="Address e.g. 0x038B" />
-              <input id="bmsWriteValue" type="number" value="2" placeholder="Value" />
-              <button onclick="bmsRegisterWrite()">Manual Write</button>
-              <button onclick="renderBmsPresetRegisters()">Refresh Presets</button>
+              <input id="bmsVersionSbmuCount" type="number" min="0" max="32" value="1" placeholder="SBMU count" />
+              <button onclick="bmsReadVersion()">Read Selected BMS Version</button>
             </div>
-            <div class="scroll"><table><thead><tr><th>Register</th><th>Name</th><th>Value</th><th>Preset</th><th>Action</th></tr></thead><tbody id="bmsPresetRows"></tbody></table></div>
+            <pre id="bmsVersionResult">No version read yet.</pre>
+            <details><summary class="muted">Advanced manual register write</summary>
+              <div class="toolbar" style="margin:10px 0; flex-wrap:wrap">
+                <select id="bmsWriteScope"><option value="single">selected BMS</option><option value="all_online">all online BMS</option></select>
+                <input id="bmsWriteAddress" value="0x038B" placeholder="Address e.g. 0x038B" />
+                <input id="bmsWriteValue" type="number" value="2" placeholder="Value" />
+                <button onclick="bmsRegisterWrite()">Manual Write</button>
+              </div>
+            </details>
+            <table style="display:none"><tbody id="bmsPresetRows"></tbody></table>
           </div>
         </section>
         <section class="section"><div class="head"><h2>RTC Write</h2><span class="muted">Writes 0x0382~0x0387 as year/month/day/hour/minute/second.</span></div><div class="content">
@@ -4362,9 +4426,9 @@ def _runtime_dashboard_html() -> str:
               <label>Selected PCS</label><select id="pcsSelected"></select>
               <button onclick="populatePcsSelected()">Refresh PCS List</button>
               <button onclick="pcsSingleSelected('connect')">Connect</button>
-              <button onclick="pcsSingleSelected('stop')">Disconnect</button>
-              <button onclick="pcsOneCommandSelected('start')">Start</button>
-              <button onclick="pcsOneCommandSelected('stop')">Stop Command</button>
+              <button onclick="pcsSingleSelected('stop')">Disconnect Polling</button>
+              <button onclick="pcsOneCommandSelected('start')">PCS Start Command</button>
+              <button onclick="pcsOneCommandSelected('stop')">PCS Stop Command</button>
               <button onclick="pcsOneCommandSelected('standby')">Standby</button>
             </div>
             <div class="cards" id="pcsControlCards"></div>
@@ -4411,7 +4475,7 @@ def _runtime_dashboard_html() -> str:
             </div>
           </div></section>
         </section>
-        <section class="section"><div class="head"><h2>PCS Devices</h2><span class="muted" id="pcsCount"></span></div><div class="scroll"><table><thead><tr><th>Name</th><th>Connection</th><th>Status</th><th>Errors</th><th>Latest values</th><th>Last message</th><th>Action</th></tr></thead><tbody id="pcsRows"></tbody></table></div></section>
+        <section class="section"><div class="head"><h2>PCS Devices</h2><span class="muted" id="pcsCount"></span></div><div class="scroll"><table><thead><tr><th>Name</th><th>Connection</th><th>Status</th><th>AC</th><th>DC</th><th>Run</th><th>Last message</th><th>Action</th></tr></thead><tbody id="pcsRows"></tbody></table></div></section>
       </section>
       
         <section class="section"><div class="head"><h2>PCS Alarms / Faults</h2><span class="muted">Derived from PCS runtime state, latest snapshot and Alarm Center.</span></div><div class="scroll"><table><thead><tr><th>PCS</th><th>Severity</th><th>Status</th><th>Message</th></tr></thead><tbody id="pcsAlarmRows"></tbody></table></div></section><section id="page-strategy" data-title="Strategy Center" class="page">
@@ -4587,7 +4651,7 @@ def _runtime_dashboard_html() -> str:
             <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap">
               <select id="curveDeviceType" onchange="renderCurve()"><option value="all">All</option><option value="BMS">BMS</option><option value="PCS">PCS</option></select>
               <select id="curveDevice" onchange="renderCurve()"></select>
-              <select id="curveSignal" onchange="renderCurve()"><option value="soc">SOC</option><option value="voltage">Voltage</option><option value="current">Current</option><option value="power">Power</option><option value="actual_power">PCS Actual Power</option><option value="reactive_power">Reactive Power</option><option value="temperature">Temperature</option></select>
+              <select id="curveSignal" onchange="renderCurve()"><option value="soc">SOC</option><option value="voltage">Voltage</option><option value="current">Current</option><option value="power">Power</option><option value="actual_power">PCS Actual Power</option><option value="reactive_power">Reactive Power</option><option value="temperature">Temperature</option><option value="bms_status">BMS Status</option><option value="rack_count">BMS Online Rack Count</option></select>
               <label class="muted"><input type="checkbox" id="curveMulti" style="min-width:0" onchange="renderCurve()" /> Compare all devices of same type</label>
               <input id="curveMaxSamples" type="number" value="600" min="60" max="5000" step="60" placeholder="Max samples" />
               <button onclick="resetCurveBuffer()">Reset Buffer</button>
@@ -5282,6 +5346,9 @@ function bmsHvAll(mode){ const opts=bmsHvOptions(); const note=opts.ignore_pcs_p
 function bmsHvScoped(mode){ return bmsScope()==='single' ? bmsHv(mode) : bmsHvAll(mode); }
 async function bmsHeartbeat(start){ const box=$('bmsHeartbeatStatus'); if(box) box.innerHTML=start?'<span class="ok">Heartbeat start command sent. Periodic heartbeat is being queued by Runtime.</span>':'<span class="warn">Heartbeat stop command sent.</span>'; const data=await postJson(start?'/api/bms/heartbeat/start-all':'/api/bms/heartbeat/stop-all', {}, 'opsCommandResult'); if(box) box.innerHTML=(data.ok!==false?(start?'<span class="ok">Heartbeat active / start acknowledged.</span>':'<span class="warn">Heartbeat stopped / stop acknowledged.</span>'):'<span class="bad">Heartbeat command failed.</span>')+' <code>'+esc(data.command_id||data.status||'')+'</code>'; }
 function bmsClearFaultAll(){ if(!requireExecute('Clear fault on all online BMS?')) return; postJson('/api/bms/command', {scope:'all_online', command:'clear_fault', confirm_text:'EXECUTE'}, 'opsCommandResult'); }
+function bmsCommandByName(device, command){ if(!device) return; if(command==='clear_fault' && !requireExecute(`Clear fault on ${device}?`)) return; postJson('/api/bms/command', {device, scope:'single', command, confirm_text:'EXECUTE'}, 'opsCommandResult'); }
+function bmsHeartbeatByName(device){ if(!device) return; postJson('/api/bms/register-write', {device, scope:'single', address:0x0380, value:1, confirm_text:'EXECUTE'}, 'opsCommandResult'); }
+async function bmsReadVersion(){ const device=opsBmsName(); if(!device){ $('bmsVersionResult').textContent='Select a BMS first.'; return; } const sbmu_count=parseInt($('bmsVersionSbmuCount')?.value||'1'); const r=await postJson('/api/bms/version', {device, sbmu_count}, 'bmsVersionResult'); if($('bmsVersionResult')) $('bmsVersionResult').textContent=JSON.stringify(r, null, 2); }
 function bms038b(start){ postJson(start?'/api/bms/038b/start':'/api/bms/038b/stop', {}, 'opsCommandResult'); }
 function parseAddrForApi(v){ const t=String(v||'').trim(); return t.toLowerCase().startsWith('0x') ? t : Number(t); }
 function fillRtcNow(){ const d=new Date(); $('rtcYear').value=d.getFullYear(); $('rtcMonth').value=d.getMonth()+1; $('rtcDay').value=d.getDate(); $('rtcHour').value=d.getHours(); $('rtcMinute').value=d.getMinutes(); $('rtcSecond').value=d.getSeconds(); }
@@ -5314,7 +5381,7 @@ function renderBmsControl(){
     const power=metricFromDevice(d, vals, ['power','active_power','dc_power','system_power']);
     const statusLabel=bmsStatusFromDevice(d, vals);
     const stClass=bmsStatusClass(statusLabel);
-    return `<tr class="${isSel?'selected-row':''}" onclick="if($('opsBmsDevice')){$('opsBmsDevice').value='${esc(d.name)}'; renderBmsControl(); renderBmsPresetRegisters();}"><td>${esc(d.name)}</td><td>${pill(d.connection||'')}</td><td>${fmtMetric(soc,'%',1)}</td><td>${fmtMetric(voltage,' V',1)}</td><td>${fmtMetric(current,' A',1)}</td><td>${fmtMetric(power,' kW',1)}</td><td><span class="pill ${esc(stClass)}">${esc(statusLabel)}</span></td><td>${esc(d.updated_at||d.last_update||d.last_seen||'-')}</td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','start')">Connect</button> <button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','stop')">Disconnect</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','on')">HV ON</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','off')">HV OFF</button></td></tr>`;
+    return `<tr class="${isSel?'selected-row':''}" onclick="if($('opsBmsDevice')){$('opsBmsDevice').value='${esc(d.name)}'; renderBmsControl(); renderBmsPresetRegisters();}"><td>${esc(d.name)}</td><td>${pill(d.connection||'')}</td><td>${fmtMetric(soc,'%',1)}</td><td>${fmtMetric(voltage,' V',1)}</td><td>${fmtMetric(current,' A',1)}</td><td>${fmtMetric(power,' kW',1)}</td><td><span class="pill ${esc(stClass)}">${esc(statusLabel)}</span></td><td>${esc(d.updated_at||d.last_update||d.last_seen||'-')}</td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','start')">Connect</button> <button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','stop')">Disconnect</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','on')">HV ON</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','off')">HV OFF</button> <button onclick="event.stopPropagation(); bmsCommandByName('${esc(d.name)}','clear_fault')">Clear Fault</button> <button onclick="event.stopPropagation(); bmsHeartbeatByName('${esc(d.name)}')">Heartbeat</button></td></tr>`;
   }).join('') || '<tr><td colspan="10" class="muted">No BMS devices</td></tr>';
 }
 async function csvBms(start){ const device=opsBmsName(); const payload=device?{devices:[device]}:{devices:[]}; const data=await postJson(start?'/api/csv/bms/start':'/api/csv/bms/stop', payload, 'opsCommandResult'); $('opsCsvStatus').textContent=JSON.stringify(data.recording||data, null, 2); }
@@ -5326,7 +5393,8 @@ async function loadOperationLog(){ try{ const r=await fetch('/api/logs/operation
 function populatePcsSelected(){ if(!SNAP) return; const sel=$('pcsSelected'); if(!sel) return; const old=sel.value; const names=pcsRows().map(x=>x.name).filter(Boolean).sort(); sel.innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join(''); if(names.includes(old)) sel.value=old; renderPcsCards(); }
 function selectedPcs(){ return $('pcsSelected') ? $('pcsSelected').value : ''; }
 function renderPcsCards(){ const rows=pcsRows(); const online=rows.filter(d=>d.online || d.connection==='online').length; if($('pcsControlCards')) $('pcsControlCards').innerHTML=[['PCS Total',rows.length,''],['Online',online,online===rows.length?'ok':'warn'],['Running',((SNAP?.workers||{}).pcs_running||[]).length,'accent'],['Errors',rows.filter(d=>d.error||d.errors).length,'bad']].map(([l,v,c])=>`<div class="card"><div class="label">${esc(l)}</div><div class="value ${c}">${esc(v)}</div></div>`).join(''); }
-function renderPCS(){ if(!SNAP) return; populatePcsSelected(); const rows=pcsRows(); $('pcsCount').textContent=`${rows.length} PCS`; $('pcsRows').innerHTML=rows.map(d=>{ const vals=d.latest_values||{}; const isSel=selectedPcs()===d.name; return `<tr class="${isSel?'selected-row':''}" onclick="if($('pcsSelected')){$('pcsSelected').value='${esc(d.name)}'; renderPCS();}"><td>${esc(d.name)}</td><td>${pill(d.connection)}</td><td>${esc(d.status||'')}</td><td>${esc(d.errors||0)}</td><td><div><b>SOC</b> ${esc(bmsMetric(vals,['soc','SOC','soc_value']))}</div><div><b>V</b> ${esc(bmsMetric(vals,['voltage','system_voltage','total_voltage','dc_voltage']))}</div><div><b>I</b> ${esc(bmsMetric(vals,['current','system_current','dc_current']))}</div><div><b>Status</b> ${esc(d.status||bmsMetric(vals,['status','state']))}</div></td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','connect')">Connect</button> <button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','stop')">Disconnect</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','start')">Start</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','stop')">Stop</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','close_dc_breaker')">Close DC</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','open_dc_breaker')">Open DC</button></td></tr>`}).join('') || '<tr><td colspan="7" class="muted">No PCS devices</td></tr>'; renderPcsCards(); }
+function pcsStateLabel(vals, d, keys){ const v=bmsMetric(vals, keys); if(v==='-'||v===undefined||v===null||v==='') return d.status||'-'; const n=Number(v); if(Number.isFinite(n)){ if(n===0) return 'Open/Off'; if(n===1) return 'Closed/On'; return String(v); } return String(v); }
+function renderPCS(){ if(!SNAP) return; populatePcsSelected(); const rows=pcsRows(); $('pcsCount').textContent=`${rows.length} PCS`; $('pcsRows').innerHTML=rows.map(d=>{ const vals=d.latest_values||d.snapshot||{}; const isSel=selectedPcs()===d.name; const ac=pcsStateLabel(vals,d,['ac_breaker_status','ac_contactor_status','grid_contactor_status','ac_relay_status']); const dc=pcsStateLabel(vals,d,['dc_breaker_status','dc_contactor_status','dc_relay_status','dc_breaker_closed']); const run=pcsStateLabel(vals,d,['run_status','work_status','running_status','pcs_running','power_on_status']); return `<tr class="${isSel?'selected-row':''}" onclick="if($('pcsSelected')){$('pcsSelected').value='${esc(d.name)}'; renderPCS();}"><td>${esc(d.name)}</td><td>${pill(d.connection)}</td><td>${esc(d.status||'')}</td><td>${esc(ac)}</td><td>${esc(dc)}</td><td>${esc(run)}</td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','connect')">Connect Polling</button> <button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','stop')">Disconnect Polling</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','start')">PCS Start</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','stop')">PCS Stop</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','close_dc_breaker')">Close DC</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','open_dc_breaker')">Open DC</button></td></tr>`}).join('') || '<tr><td colspan="8" class="muted">No PCS devices</td></tr>'; renderPcsCards(); }
 
 function renderPcsAlarms(){
   const tb=$('pcsAlarmRows'); if(!tb) return;
@@ -5391,8 +5459,12 @@ function renderOverview(){
   if($('overviewAlarmRows')) $('overviewAlarmRows').innerHTML=alarms.slice(0,12).map(a=>`<tr><td>${esc(a.severity||'')}</td><td>${esc(a.area||a.kind||'')}</td><td>${esc(a.device||'')}</td><td>${esc(a.message||a.key||a.status||'')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No active runtime alarms or issues.</td></tr>';
   if($('runtimeSummary')) $('runtimeSummary').textContent=JSON.stringify({api_schema:SNAP.api_schema, uptime_s:SNAP.uptime_s, workers:SNAP.workers, summary:SNAP.summary, recording:SNAP.recording}, null, 2);
   if($('soakSummary')) $('soakSummary').textContent=JSON.stringify(SNAP.soak_test||{}, null, 2);
+  renderOverviewTrendCards();
 }
-function csvStatusText(){ const r=SNAP?.recording||{}; const on=[]; if(r.bms_csv) on.push('BMS'); if(r.pcs_csv) on.push('PCS'); return on.length?on.join('+'):'idle'; }
+function sparklineSvg(series){ const data=(series?.data||[]).slice(-80); if(!data.length) return '<div class="muted">No samples yet</div>'; const ys=data.map(p=>Number(p.y)).filter(Number.isFinite); const mn=Math.min(...ys), mx=Math.max(...ys); const span=(mx-mn)||1; const pts=data.map((p,i)=>`${(i/Math.max(data.length-1,1)*100).toFixed(1)},${(28-((Number(p.y)-mn)/span)*24).toFixed(1)}`).join(' '); return `<svg viewBox="0 0 100 32" preserveAspectRatio="none" style="width:100%;height:70px"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2"/></svg><div class="muted">min ${esc(mn)} · max ${esc(mx)} · last ${esc(ys[ys.length-1])}</div>`; }
+async function renderOverviewTrendCards(){ const box=$('overviewTrendCards'); if(!box) return; try{ const [st,rk]=await Promise.all([fetch('/api/curves/live?signal=bms_status&device_type=bms&multi=true&limit=120',{cache:'no-store'}).then(r=>r.json()), fetch('/api/curves/live?signal=rack_count&device_type=bms&multi=true&limit=120',{cache:'no-store'}).then(r=>r.json())]); const cards=[]; for(const s of (st.series||[]).slice(0,6)) cards.push(`<div class="chart-card"><div class="chart-title">${esc(s.name)}</div>${sparklineSvg(s)}</div>`); for(const s of (rk.series||[]).slice(0,6)) cards.push(`<div class="chart-card"><div class="chart-title">${esc(s.name)}</div>${sparklineSvg(s)}</div>`); box.innerHTML=cards.join('') || '<div class="muted">No BMS status/rack-count samples yet.</div>'; }catch(e){ box.innerHTML=`<span class="bad">Trend load failed: ${esc(e)}</span>`; }
+}
+function csvStatusText(){ const r=SNAP?.recording||{}; const on=[]; if((r.bms_csv||[]).length) on.push('BMS'); if((r.pcs_csv||[]).length) on.push('PCS'); return on.length?on.join('+'):'idle'; }
 function overviewAlarmItems(){ const out=[]; const ds=(SNAP?.device_states)||{}; for(const [kind,map] of Object.entries({bms:ds.bms||{}, pcs:ds.pcs||{}})){ for(const [name,d] of Object.entries(map||{})){ if(d.error||d.errors){ out.push({severity:'alarm',area:kind,device:name,message:d.last_message||d.error||`${d.errors} error(s)`}); } if(d.online===false||d.connection==='offline'){ out.push({severity:'warning',area:kind,device:name,message:'offline'}); } } } return out; }
 function renderDevices(){ if(!SNAP) return; const q=($('deviceFilter')?.value||'').toLowerCase(); const tf=$('typeFilter')?.value||'all'; const rows=deviceRows().filter(d=>(tf==='all'||d._type===tf) && (!q || String(d.name).toLowerCase().includes(q) || String(d.connection).toLowerCase().includes(q) || String(d.last_message).toLowerCase().includes(q))); $('devices').innerHTML=rows.map(d=>{ const isSel=SELECTED_DEVICE.kind===d._type && SELECTED_DEVICE.name===d.name; return `<tr class="clickable-row ${isSel?'selected-row':''}" onclick="selectDevice('${esc(d._type)}','${esc(d.name)}')"><td>${esc(d._type)}</td><td>${esc(d.name)}</td><td>${pill(d.connection)}</td><td>${esc(d.status)}</td><td>${esc(d.errors||0)}</td><td>${esc(d.last_latency_ms||0)}</td><td>${esc(d.last_message||'')}</td></tr>`; }).join('') || '<tr><td colspan="7" class="muted">No devices</td></tr>'; $('deviceCount').textContent=`${rows.length} rows`; }
 async function selectDevice(kind,name){ SELECTED_DEVICE={kind,name}; renderDevices(); if($('selectedDeviceTitle')) $('selectedDeviceTitle').textContent=`${kind} ${name}`; if($('deviceSnapshot')) $('deviceSnapshot').textContent='Loading...'; try{ const r=await fetch(`/api/device/${kind.toLowerCase()}/${encodeURIComponent(name)}/snapshot`, {cache:'no-store'}); if($('deviceSnapshot')) $('deviceSnapshot').textContent=JSON.stringify(await r.json(), null, 2); }catch(e){ if($('deviceSnapshot')) $('deviceSnapshot').textContent=String(e); } }
@@ -6238,6 +6310,11 @@ def create_fastapi_app(bridge: RuntimeApiBridge):
         payload = await _json_or_empty(request)
         dev = _first_nonempty(payload.get("device"), payload.get("name"), device)
         return bridge.enqueue("stop_bms", device=dev, timeout_s=5.0)
+
+    @app.post("/api/bms/version")
+    async def bms_version(request: Request) -> dict[str, Any]:
+        payload = await _json_or_empty(request)
+        return bridge.enqueue("read_bms_version", device=_first_nonempty(payload.get("device"), payload.get("name")), sbmu_count=int(payload.get("sbmu_count") or 1), timeout_s=10.0)
 
     @app.post("/api/bms/command")
     async def bms_command(request: Request, command: str = "", scope: str = "", device: str = "") -> dict[str, Any]:
