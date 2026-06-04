@@ -221,7 +221,35 @@ class BmsModbusClient:
             if point is None:
                 continue
             value = self._apply_transform(raw, point.scale, point.offset)
-            result[point.key] = int(value) if float(value).is_integer() else value
+            value = int(value) if float(value).is_integer() else value
+            result[point.key] = value
+            # Stable engineering aliases for the V22 SBMU/Rack summary block.
+            # The point-table keys can become soc_2/soh_2/etc. because the same
+            # descriptions also exist in the MBMU/system area. The Web UI should
+            # not depend on those auto-suffixed keys.
+            rel = addr - base
+            alias_by_rel = {
+                0x0010: "precharge_relay_status",
+                0x0011: "positive_relay_status",
+                0x0012: "negative_relay_status",
+                0x0013: "online_status",
+                0x0020: "rack_voltage_outside",
+                0x0021: "rack_voltage_inside",
+                0x0022: "rack_current",
+                0x0023: "rack_soc",
+                0x0024: "rack_soh",
+                0x0025: "max_cell_voltage",
+                0x0026: "min_cell_voltage",
+                0x0027: "avg_cell_voltage",
+                0x0028: "max_temperature",
+                0x0029: "min_temperature",
+                0x002A: "avg_temperature",
+                0x002F: "rack_power",
+                0x0038: "cell_voltage_sum",
+            }
+            alias = alias_by_rel.get(rel)
+            if alias:
+                result[alias] = value
         return result
 
     def read_bms_power_on(self) -> Optional[int]:
