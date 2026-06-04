@@ -333,20 +333,20 @@
         "page": 14,
         "register_address": "0x038c",
         "byte_quantity": "2",
-        "description": "Fault Clear cmd Rack (s) disable",
+        "description": "Fault Clear cmd",
         "ratio_factor": "1",
         "offset": "0",
         "actual_span": "0-1",
-        "comment": "0: Normal 1: Fault Clear cmd 0: Enable 1: Disable Bit 0: Rack 1",
+        "comment": "0: Normal 1: Fault Clear cmd",
         "access": "R/W",
         "raw_columns": [
           "0x038c",
           "2",
-          "Fault Clear cmd Rack (s) disable",
+          "Fault Clear cmd",
           "1",
           "0",
           "0-1",
-          "0: Normal 1: Fault Clear cmd 0: Enable 1: Disable Bit 0: Rack 1"
+          "0: Normal 1: Fault Clear cmd"
         ]
       },
       {

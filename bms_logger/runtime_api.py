@@ -1547,14 +1547,39 @@ class RuntimeApiBridge(QObject):
                         continue
             return None
 
+        def _first_present(snapshot: dict[str, Any], keys: list[str]) -> Any:
+            for key in keys:
+                try:
+                    value = snapshot.get(key)
+                    if value is not None and value != "":
+                        return value
+                except Exception:
+                    continue
+            return None
+
         def _latest_values(snapshot: dict[str, Any]) -> dict[str, Any]:
             snapshot = snapshot or {}
             values = {
                 "soc": _num_from_snapshot(snapshot, ["soc", "SOC", "system_soc", "mbmu_soc", "soc_percent", "soc_value"]),
                 "voltage": _num_from_snapshot(snapshot, ["voltage", "system_voltage", "total_voltage", "pack_voltage", "dc_voltage", "voltage_value"]),
                 "current": _num_from_snapshot(snapshot, ["current", "system_current", "pack_current", "dc_current", "current_value"]),
-                "power": _num_from_snapshot(snapshot, ["power", "power_kw", "actual_power", "active_power", "active_power_kw", "p_kw"]),
+                "power": _num_from_snapshot(snapshot, ["power", "system_power", "power_kw", "actual_power", "active_power", "active_power_kw", "dc_power", "p_kw"]),
+                "bms_status": _first_present(snapshot, ["bms_status", "system_status", "status", "state", "work_status", "running_status"]),
+                "bms_power_on": _first_present(snapshot, ["bms_power_on", "power_on", "power_on_status"]),
+                "hv_online_racks": _num_from_snapshot(snapshot, ["number_of_hv_connected_racks", "hv_online_racks", "online_rack_count", "rack_online_count", "racks_online"]),
+                "number_of_racks": _num_from_snapshot(snapshot, ["number_of_racks", "rack_count", "total_racks"]),
+                "ac_breaker_status": _first_present(snapshot, ["ac_breaker_status", "ac_contactor_status", "grid_contactor_status", "ac_relay_status"]),
+                "dc_breaker_status": _first_present(snapshot, ["dc_breaker_status", "dc_contactor_status", "dc_relay_status", "dc_breaker_closed"]),
+                "run_status": _first_present(snapshot, ["run_status", "work_status", "running_status", "pcs_running", "power_on_status"]),
             }
+            if values.get("power") is None:
+                voltage = values.get("voltage")
+                current = values.get("current")
+                if voltage is not None and current is not None:
+                    try:
+                        values["power"] = float(voltage) * float(current) / 1000.0
+                    except Exception:
+                        pass
             return {k: v for k, v in values.items() if v is not None}
 
         def classify(name: str, running: bool, has_snapshot: bool, row: dict[str, Any] | None, snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1565,8 +1590,12 @@ class RuntimeApiBridge(QObject):
             error_count = int(row.get("errors") or 0)
             low = status.lower()
             is_error = bool(error_count) or low in {"error", "offline", "retrywait", "timeout"}
-            if running and has_snapshot and not is_error:
+            # Prefer fresh successful data over stale error counters.  After a
+            # temporary communication loss, the task row may still contain an
+            # old error count/message even though polling has already recovered.
+            if running and has_snapshot:
                 connection = "online"
+                is_error = False
             elif running and is_error:
                 connection = "error"
             elif running:
@@ -2474,6 +2503,148 @@ class RuntimeApiBridge(QObject):
             return {"ok": True, "device": dev_name, "sbmu_count": int(sbmu_count or 0), "version": data}
         except Exception as exc:
             return {"ok": False, "device": dev_name, "error": str(exc)}
+
+    def _bms_client_for_device(self, dev_name: str):
+        cfg = next((d for d in getattr(self.window, "devices", []) or [] if str(d.get("name", "")) == dev_name), None)
+        if not cfg:
+            raise RuntimeError(f"BMS config not found: {dev_name}")
+        from .client_factory import create_bms_client
+        return create_bms_client(cfg, fake_mode=bool(getattr(self.window, "fake_mode", False)))
+
+    def _read_bms_racks_runtime(self, device: str, count: int = 16) -> dict[str, Any]:
+        dev_name = str(device or "").strip()
+        if not dev_name:
+            return {"ok": False, "error": "Missing BMS device"}
+        count = max(1, min(int(count or 16), 48))
+        client = None
+        try:
+            client = self._bms_client_for_device(dev_name)
+            if hasattr(client, "connect"):
+                client.connect()
+            rows: list[dict[str, Any]] = []
+            for idx in range(1, count + 1):
+                raw = client.read_sbmu_summary(idx) if hasattr(client, "read_sbmu_summary") else None
+                raw = raw or {}
+                def pick(*keys):
+                    for k in keys:
+                        if k in raw and raw.get(k) is not None:
+                            return raw.get(k)
+                    return None
+                base = idx * 0x400
+                v_out = pick("battery_subsystem_external_voltage", "rack_voltage_outside", "rack_voltage", "battery_subsystem_voltage", "external_voltage")
+                cur = pick("battery_subsystem_current", "rack_current", "current")
+                power = pick("battery_subsystem_power", "rack_power", "power")
+                if power is None and v_out is not None and cur is not None:
+                    try:
+                        power = float(v_out) * float(cur) / 1000.0
+                    except Exception:
+                        pass
+                pos = pick("master_positive_relay_status", "positive_relay_status")
+                neg = pick("master_negative_relay_status", "negative_relay_status")
+                online = pick("high_voltage_online_status", "online", "hv_online_status")
+                ready = bool(str(online) in {"1", "1.0", "true", "True"} and str(pos) in {"1", "1.0", "true", "True"} and str(neg) in {"1", "1.0", "true", "True"})
+                rows.append({
+                    "rack": idx,
+                    "base_address": f"0x{base:04X}",
+                    "online": online,
+                    "power_on_ready": ready,
+                    "precharge_relay": pick("precharge_relay_status"),
+                    "positive_relay": pos,
+                    "negative_relay": neg,
+                    "voltage_outside_v": v_out,
+                    "voltage_inside_v": pick("battery_subsystem_internal_voltage", "rack_voltage_inside", "internal_voltage"),
+                    "current_a": cur,
+                    "power_kw": power,
+                    "soc_percent": pick("soc", "rack_soc"),
+                    "soh_percent": pick("soh", "rack_soh"),
+                    "max_cell_mv": pick("maximum_cell_voltage", "max_cell_voltage"),
+                    "min_cell_mv": pick("minimum_cell_voltage", "min_cell_voltage"),
+                    "avg_cell_mv": pick("average_cell_voltage", "avg_cell_voltage"),
+                    "cell_voltage_sum_v": pick("sum_cell_voltage", "cell_voltage_sum", "total_cell_voltage"),
+                    "max_temp_c": pick("maximum_temperature", "max_temperature"),
+                    "min_temp_c": pick("minimum_temperature", "min_temperature"),
+                    "avg_temp_c": pick("average_temperature", "avg_temperature"),
+                    "raw": raw,
+                })
+            masks = {}
+            for addr in (0x038D, 0x038E, 0x038F):
+                try:
+                    if hasattr(client, "_read_single_register"):
+                        masks[f"0x{addr:04X}"] = client._read_single_register(addr)
+                except Exception:
+                    masks[f"0x{addr:04X}"] = None
+            return {"ok": True, "device": dev_name, "count": count, "racks": rows, "disable_masks": masks}
+        except Exception as exc:
+            return {"ok": False, "device": dev_name, "error": str(exc)}
+        finally:
+            try:
+                if client is not None:
+                    if hasattr(client, "close"):
+                        client.close()
+                    elif hasattr(client, "disconnect"):
+                        client.disconnect()
+            except Exception:
+                pass
+
+    def _apply_bms_rack_mask_runtime(self, device: str, changes: list[dict[str, Any]]) -> dict[str, Any]:
+        dev_name = str(device or "").strip()
+        if not dev_name:
+            return {"ok": False, "error": "Missing BMS device"}
+        if not isinstance(changes, list) or not changes:
+            return {"ok": False, "device": dev_name, "error": "No rack enable/disable changes selected"}
+        client = None
+        try:
+            client = self._bms_client_for_device(dev_name)
+            if hasattr(client, "connect"):
+                client.connect()
+            target: dict[int, int] = {}
+            current: dict[int, int] = {}
+            for addr in (0x038D, 0x038E, 0x038F):
+                val = 0
+                if hasattr(client, "_read_single_register"):
+                    got = client._read_single_register(addr)
+                    val = int(got or 0)
+                current[addr] = val & 0xFFFF
+                target[addr] = val & 0xFFFF
+            normalized=[]
+            for ch in changes:
+                rack = int(ch.get("rack") or 0)
+                action = str(ch.get("action") or "").lower()
+                if rack < 1 or rack > 48 or action not in {"enable", "disable"}:
+                    continue
+                addr = 0x038D + ((rack - 1) // 16)
+                bit = (rack - 1) % 16
+                if action == "disable":
+                    target[addr] |= (1 << bit)
+                else:
+                    target[addr] &= ~(1 << bit)
+                normalized.append({"rack": rack, "action": action, "address": f"0x{addr:04X}", "bit": bit})
+            if not normalized:
+                return {"ok": False, "device": dev_name, "error": "No valid rack changes"}
+            written=[]
+            readback={}
+            for addr, val in target.items():
+                if val == current.get(addr):
+                    continue
+                ok = client.write_single_register(addr, int(val)) if hasattr(client, "write_single_register") else False
+                written.append({"address": f"0x{addr:04X}", "current": current.get(addr), "target": val, "ok": bool(ok)})
+                try:
+                    if hasattr(client, "_read_single_register"):
+                        readback[f"0x{addr:04X}"] = client._read_single_register(addr)
+                except Exception:
+                    readback[f"0x{addr:04X}"] = None
+            return {"ok": bool(written) and all(x.get("ok") for x in written), "device": dev_name, "changes": normalized, "current": {f"0x{k:04X}": v for k,v in current.items()}, "target": {f"0x{k:04X}": v for k,v in target.items()}, "written": written, "readback": readback, "safety_note": "0=Enable, 1=Disable. Command writes full bitmask after reading current mask."}
+        except Exception as exc:
+            return {"ok": False, "device": dev_name, "error": str(exc)}
+        finally:
+            try:
+                if client is not None:
+                    if hasattr(client, "close"):
+                        client.close()
+                    elif hasattr(client, "disconnect"):
+                        client.disconnect()
+            except Exception:
+                pass
 
     def _read_recent_operation_log(self, max_lines: int = 300) -> dict[str, Any]:
         path = Path(self._log_status().get("operation_log_today", ""))
@@ -3935,6 +4106,14 @@ class RuntimeApiBridge(QObject):
                 restore_strategy=bool(kwargs.get("restore_strategy", False)),
             )
 
+        if name == "read_bms_racks":
+            result = self._read_bms_racks_runtime(str(kwargs.get("device") or ""), int(kwargs.get("count") or 16))
+            result.update({"command": name})
+            return result
+        if name == "apply_bms_rack_mask":
+            result = self._apply_bms_rack_mask_runtime(str(kwargs.get("device") or ""), list(kwargs.get("changes") or []))
+            result.update({"command": name})
+            return result
         if name == "read_bms_version":
             result = self._read_bms_version_runtime(str(kwargs.get("device") or ""), int(kwargs.get("sbmu_count") or 1))
             result.update({"command": name})
@@ -4380,7 +4559,20 @@ def _runtime_dashboard_html() -> str:
             <div id="bmsHeartbeatStatus" class="command-feedback">Heartbeat idle. Start heartbeat to send EMS heartbeat periodically.</div>
           </div></section>
         </section>
-        <section class="section"><div class="head"><h2>BMS Live Devices</h2><span class="muted" id="bmsControlCount"></span></div><div class="scroll"><table><thead><tr><th>Name</th><th>Connection</th><th>SOC</th><th>Voltage</th><th>Current</th><th>Power</th><th>Status</th><th>Updated</th><th>Last Message</th><th>Action</th></tr></thead><tbody id="bmsControlRows"></tbody></table></div></section>
+        <section class="section"><div class="head"><h2>BMS Live Devices</h2><span class="muted" id="bmsControlCount"></span></div><div class="scroll"><table><thead><tr><th>Name</th><th>Connection</th><th>SOC</th><th>Voltage</th><th>Current</th><th>Power</th><th>Status</th><th>Online Racks</th><th>Updated</th><th>Last Message</th><th>Action</th></tr></thead><tbody id="bmsControlRows"></tbody></table></div></section>
+        <section class="section"><div class="head"><h2>Rack / SBMU Monitor</h2><span class="muted">Selected BMS rack monitor. Enable/Disable selections are staged first, then written once as 0x038D/0x038E/0x038F bitmasks.</span></div>
+          <div class="content">
+            <div class="toolbar" style="margin-bottom:10px; flex-wrap:wrap">
+              <label>SBMU / Rack count</label><input id="rackSbmuCount" type="number" min="1" max="48" value="16" />
+              <button onclick="readRackSbmu()">Refresh Rack/SBMU</button>
+              <button onclick="previewRackMask()">Preview Mask</button>
+              <button onclick="applyRackMask()">Apply Enable/Disable</button>
+            </div>
+            <div id="rackMaskPreview" class="command-feedback">No rack changes selected.</div>
+            <div class="scroll"><table><thead><tr><th>Rack</th><th>Online</th><th>SOC</th><th>V outside</th><th>V inside</th><th>Current</th><th>Power</th><th>Cell Sum</th><th>Ready</th><th>Relay +/-</th><th>Temp max/min</th><th>Action</th></tr></thead><tbody id="rackSbmuRows"><tr><td colspan="12" class="muted">Select a BMS and refresh.</td></tr></tbody></table></div>
+            <pre id="rackSbmuRaw" style="max-height:260px;overflow:auto">No rack data.</pre>
+          </div>
+        </section>
         <section class="section"><div class="head"><h2>BMS Version Read</h2><span class="muted">Read MBMU, ETH and selected SBMU version blocks. SBMU01 uses the configured base address; SBMU02+ are base + 0x400 each.</span></div>
           <div class="content">
             <div class="toolbar" style="margin-bottom:10px; flex-wrap:wrap">
@@ -4426,7 +4618,7 @@ def _runtime_dashboard_html() -> str:
               <label>Selected PCS</label><select id="pcsSelected"></select>
               <button onclick="populatePcsSelected()">Refresh PCS List</button>
               <button onclick="pcsSingleSelected('connect')">Connect</button>
-              <button onclick="pcsSingleSelected('stop')">Disconnect Polling</button>
+              <button onclick="pcsSingleSelected('stop')">Disconnect Comm</button>
               <button onclick="pcsOneCommandSelected('start')">PCS Start Command</button>
               <button onclick="pcsOneCommandSelected('stop')">PCS Stop Command</button>
               <button onclick="pcsOneCommandSelected('standby')">Standby</button>
@@ -4869,9 +5061,23 @@ function bmsStatusClass(label){
   return '';
 }
 function bmsStatusFromDevice(d, vals){
-  return bmsStatusLabel(bmsMetric(vals,['bms_status','system_status','status','state','work_status','running_status']) || d.bms_status || d.work_status || d.state || d.status_code || d.status);
+  vals=vals||{};
+  const keys=['bms_status','system_status','status','state','work_status','running_status'];
+  for(const k of keys){ if(vals[k]!==undefined&&vals[k]!==null&&vals[k]!==''&&vals[k]!=='-') return bmsStatusLabel(vals[k]); }
+  return bmsStatusLabel(d.bms_status ?? d.system_status ?? d.work_status ?? d.state ?? d.status_code ?? d.status);
 }
-function metricFromDevice(d, vals, keys){ return bmsMetric(vals, keys) ?? d[keys[0]] ?? '-'; }
+function metricFromDevice(d, vals, keys){
+  vals=vals||{}; d=d||{};
+  for(const k of keys){ if(vals[k]!==undefined&&vals[k]!==null&&vals[k]!==''&&vals[k]!=='-') return vals[k]; }
+  for(const k of keys){ if(d[k]!==undefined&&d[k]!==null&&d[k]!==''&&d[k]!=='-') return d[k]; }
+  if(keys.includes('power')){
+    const v=metricFromDevice(d, vals, ['voltage','system_voltage','total_voltage','dc_voltage','pack_voltage']);
+    const i=metricFromDevice(d, vals, ['current','system_current','dc_current','pack_current']);
+    const vn=Number(v), inum=Number(i);
+    if(Number.isFinite(vn)&&Number.isFinite(inum)) return vn*inum/1000.0;
+  }
+  return '-';
+}
 function dashboardBar(label, value, total, cls=''){
   const t=Math.max(Number(total)||0,0); const v=Math.max(Number(value)||0,0); const pct=t?Math.max(0,Math.min(100,(v/t)*100)):0;
   return `<div class="bar-row"><div class="bar-top"><span>${esc(label)}</span><b>${esc(v)}/${esc(t)}</b></div><div class="bar-track"><div class="bar-fill ${esc(cls)}" style="width:${pct}%"></div></div></div>`;
@@ -5331,6 +5537,7 @@ document.addEventListener('click', function(ev){
 }, false);
 
 function bmsRows(){ return (((SNAP||{}).device_states||{}).bms) ? Object.entries(SNAP.device_states.bms).map(([name,v])=>Object.assign({name},v||{})) : []; }
+let RACK_DATA=null; let RACK_ACTIONS={};
 function populateOpsBmsDevices(){ if(!SNAP) return; const sel=$('opsBmsDevice'); if(!sel) return; const old=sel.value; const bms=bmsRows().map(x=>x.name).sort(); sel.innerHTML=bms.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join(''); if(bms.includes(old)) sel.value=old; renderBmsControl(); renderBmsPresetRegisters(); }
 function opsBmsName(){ return $('opsBmsDevice') ? $('opsBmsDevice').value : ''; }
 function bmsScope(){ return $('bmsControlScope') ? $('bmsControlScope').value : 'single'; }
@@ -5348,6 +5555,12 @@ async function bmsHeartbeat(start){ const box=$('bmsHeartbeatStatus'); if(box) b
 function bmsClearFaultAll(){ if(!requireExecute('Clear fault on all online BMS?')) return; postJson('/api/bms/command', {scope:'all_online', command:'clear_fault', confirm_text:'EXECUTE'}, 'opsCommandResult'); }
 function bmsCommandByName(device, command){ if(!device) return; if(command==='clear_fault' && !requireExecute(`Clear fault on ${device}?`)) return; postJson('/api/bms/command', {device, scope:'single', command, confirm_text:'EXECUTE'}, 'opsCommandResult'); }
 function bmsHeartbeatByName(device){ if(!device) return; postJson('/api/bms/register-write', {device, scope:'single', address:0x0380, value:1, confirm_text:'EXECUTE'}, 'opsCommandResult'); }
+function rackAction(rack,action){ RACK_ACTIONS[String(rack)]=action; renderRackRows(); previewRackMask(); }
+function renderRackRows(){ const tb=$('rackSbmuRows'); if(!tb) return; const rows=(RACK_DATA&&RACK_DATA.racks)||[]; if(!rows.length){ tb.innerHTML='<tr><td colspan="12" class="muted">No rack data. Select a BMS and refresh.</td></tr>'; return; } tb.innerHTML=rows.map(r=>{ const act=RACK_ACTIONS[String(r.rack)]||'none'; const cls=act==='disable'?'bad':(act==='enable'?'ok':''); return `<tr><td>Rack ${esc(r.rack)}<br><code>${esc(r.base_address||'')}</code></td><td>${pill(String(r.online??'-'))}</td><td>${fmtMetric(r.soc_percent,'%',1)}</td><td>${fmtMetric(r.voltage_outside_v,' V',1)}</td><td>${fmtMetric(r.voltage_inside_v,' V',1)}</td><td>${fmtMetric(r.current_a,' A',1)}</td><td>${fmtMetric(r.power_kw,' kW',1)}</td><td>${fmtMetric(r.cell_voltage_sum_v,' V',1)}</td><td>${r.power_on_ready?'<span class="ok">Ready</span>':'<span class="muted">-</span>'}</td><td>${esc(r.positive_relay??'-')}/${esc(r.negative_relay??'-')}</td><td>${fmtMetric(r.max_temp_c,' ℃',1)} / ${fmtMetric(r.min_temp_c,' ℃',1)}</td><td><select class="${cls}" onchange="rackAction(${Number(r.rack)}, this.value)"><option value="none" ${act==='none'?'selected':''}>No change</option><option value="enable" ${act==='enable'?'selected':''}>Enable</option><option value="disable" ${act==='disable'?'selected':''}>Disable</option></select></td></tr>`; }).join(''); }
+async function readRackSbmu(){ const device=opsBmsName(); if(!device){ if($('rackSbmuRaw')) $('rackSbmuRaw').textContent='Select a BMS first.'; return; } const count=parseInt($('rackSbmuCount')?.value||'16'); const data=await postJson('/api/bms/racks/read',{device,count},'rackSbmuRaw'); RACK_DATA=data; RACK_ACTIONS={}; renderRackRows(); previewRackMask(); if($('rackSbmuRaw')) $('rackSbmuRaw').textContent=JSON.stringify(data,null,2); }
+function previewRackMask(){ const box=$('rackMaskPreview'); if(!box) return; const changes=Object.entries(RACK_ACTIONS).filter(([r,a])=>a&&a!=='none').map(([r,a])=>({rack:Number(r),action:a})); if(!changes.length){ box.innerHTML='No rack changes selected.'; return; } const cur=(RACK_DATA&&RACK_DATA.disable_masks)||{}; const targets={}; for(const a of ['0x038D','0x038E','0x038F']) targets[a]=Number(cur[a]??0); for(const ch of changes){ const addr='0x'+(0x038D+Math.floor((ch.rack-1)/16)).toString(16).toUpperCase().padStart(4,'0'); const bit=(ch.rack-1)%16; if(ch.action==='disable') targets[addr]|=(1<<bit); else targets[addr]&=~(1<<bit); }
+  box.innerHTML=`Selected changes: ${esc(changes.map(c=>`Rack ${c.rack} ${c.action}`).join(', '))}<br>`+Object.keys(targets).map(a=>`${a}: current ${String(Number(cur[a]??0).toString(2)).padStart(16,'0')} → target ${String(Number(targets[a]??0).toString(2)).padStart(16,'0')}`).join('<br>'); }
+async function applyRackMask(){ const device=opsBmsName(); const changes=Object.entries(RACK_ACTIONS).filter(([r,a])=>a&&a!=='none').map(([r,a])=>({rack:Number(r),action:a})); if(!device||!changes.length) return; if(!requireExecute(`Apply rack enable/disable mask to ${device}?\n${changes.map(c=>`Rack ${c.rack}: ${c.action}`).join('\n')}`)) return; const data=await postJson('/api/bms/racks/apply-mask',{device,changes,confirm_text:'EXECUTE'},'rackSbmuRaw'); if($('rackSbmuRaw')) $('rackSbmuRaw').textContent=JSON.stringify(data,null,2); await readRackSbmu(); }
 async function bmsReadVersion(){ const device=opsBmsName(); if(!device){ $('bmsVersionResult').textContent='Select a BMS first.'; return; } const sbmu_count=parseInt($('bmsVersionSbmuCount')?.value||'1'); const r=await postJson('/api/bms/version', {device, sbmu_count}, 'bmsVersionResult'); if($('bmsVersionResult')) $('bmsVersionResult').textContent=JSON.stringify(r, null, 2); }
 function bms038b(start){ postJson(start?'/api/bms/038b/start':'/api/bms/038b/stop', {}, 'opsCommandResult'); }
 function parseAddrForApi(v){ const t=String(v||'').trim(); return t.toLowerCase().startsWith('0x') ? t : Number(t); }
@@ -5356,7 +5569,7 @@ function bmsRegisterWrite(){ syncBmsWriteScope(); const scope=$('bmsWriteScope')
 function bmsRtcWrite(){ syncBmsWriteScope(); const scope=$('bmsWriteScope').value; const device=opsBmsName(); if(scope==='single'&&!device) return; const payload={device, scope, year:+$('rtcYear').value, month:+$('rtcMonth').value, day:+$('rtcDay').value, hour:+$('rtcHour').value, minute:+$('rtcMinute').value, second:+$('rtcSecond').value, confirm_text:'EXECUTE'}; if(!requireExecute(`Write RTC to ${scope==='single'?device:'all online BMS'}?`)) return; postJson('/api/bms/rtc-write', payload, 'opsCommandResult'); }
 function bmsQuickCommand(command){ syncBmsWriteScope(); const scope=bmsScope(); const device=opsBmsName(); if(scope==='single'&&!device) return; if(!requireExecute(`Send BMS command ${command} to ${scope==='single'?device:scope}?`)) return; postJson('/api/bms/command', {device, scope, command, confirm_text:'EXECUTE'}, 'opsCommandResult'); }
 const BMS_PRESET_REGS=[
-  ['0x0381','EMS command / HV request','1'],['0x038B','Insulation monitor disable','2'],['0x0380','EMS heartbeat manual value','1'],['0x0382','RTC year','2026'],['0x0383','RTC month','1'],['0x0384','RTC day','1'],['0x0385','RTC hour','0'],['0x0386','RTC minute','0'],['0x0387','RTC second','0'],['0x0388','Reserved control 0388','0'],['0x0389','Reserved control 0389','0'],['0x038A','Reserved control 038A','0'],['0x038C','Reserved control 038C','0'],['0x038D','Reserved control 038D','0'],['0x038E','Reserved control 038E','0'],['0x038F','Reserved control 038F','0'],['0x0390','Reserved control 0390','0'],['0x0391','Reserved control 0391','0'],['0x0392','Reserved control 0392','0'],['0x0393','Reserved control 0393','0'],['0x0394','Reserved control 0394','0']
+  ['0x0381','EMS command / HV request','1'],['0x038B','Insulation monitor disable','2'],['0x0380','EMS heartbeat manual value','1'],['0x0382','RTC year','2026'],['0x0383','RTC month','1'],['0x0384','RTC day','1'],['0x0385','RTC hour','0'],['0x0386','RTC minute','0'],['0x0387','RTC second','0'],['0x0388','Reserved control 0388','0'],['0x0389','Reserved control 0389','0'],['0x038A','Reserved control 038A','0'],['0x038C','Fault Clear cmd (pulse 1 then 0)','1'],['0x038D','Reserved control 038D','0'],['0x038E','Reserved control 038E','0'],['0x038F','Reserved control 038F','0'],['0x0390','Reserved control 0390','0'],['0x0391','Reserved control 0391','0'],['0x0392','Reserved control 0392','0'],['0x0393','Reserved control 0393','0'],['0x0394','Reserved control 0394','0']
 ];
 function renderBmsPresetRegisters(){ const tb=$('bmsPresetRows'); if(!tb) return; tb.innerHTML=BMS_PRESET_REGS.map((r,i)=>`<tr><td><code>${r[0]}</code></td><td>${esc(r[1])}</td><td><input id="bmsPresetVal${i}" type="number" value="${esc(r[2])}" /></td><td><button onclick="setBmsManual('${r[0]}','bmsPresetVal${i}')">Use</button></td><td><button onclick="bmsPresetWrite('${r[0]}','bmsPresetVal${i}')">Write</button></td></tr>`).join(''); }
 function setBmsManual(addr,inputId){ $('bmsWriteAddress').value=addr; $('bmsWriteValue').value=$(inputId).value; }
@@ -5378,10 +5591,13 @@ function renderBmsControl(){
     const soc=metricFromDevice(d, vals, ['soc','SOC','soc_value','system_soc']);
     const voltage=metricFromDevice(d, vals, ['voltage','system_voltage','total_voltage','dc_voltage','pack_voltage']);
     const current=metricFromDevice(d, vals, ['current','system_current','dc_current','pack_current']);
-    const power=metricFromDevice(d, vals, ['power','active_power','dc_power','system_power']);
+    const power=metricFromDevice(d, vals, ['power','system_power','active_power','dc_power','actual_power','power_kw']);
     const statusLabel=bmsStatusFromDevice(d, vals);
     const stClass=bmsStatusClass(statusLabel);
-    return `<tr class="${isSel?'selected-row':''}" onclick="if($('opsBmsDevice')){$('opsBmsDevice').value='${esc(d.name)}'; renderBmsControl(); renderBmsPresetRegisters();}"><td>${esc(d.name)}</td><td>${pill(d.connection||'')}</td><td>${fmtMetric(soc,'%',1)}</td><td>${fmtMetric(voltage,' V',1)}</td><td>${fmtMetric(current,' A',1)}</td><td>${fmtMetric(power,' kW',1)}</td><td><span class="pill ${esc(stClass)}">${esc(statusLabel)}</span></td><td>${esc(d.updated_at||d.last_update||d.last_seen||'-')}</td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','start')">Connect</button> <button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','stop')">Disconnect</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','on')">HV ON</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','off')">HV OFF</button> <button onclick="event.stopPropagation(); bmsCommandByName('${esc(d.name)}','clear_fault')">Clear Fault</button> <button onclick="event.stopPropagation(); bmsHeartbeatByName('${esc(d.name)}')">Heartbeat</button></td></tr>`;
+    const onlineRacks=metricFromDevice(d, vals, ['hv_online_racks','online_rack_count','rack_online_count','racks_online']);
+    const totalRacks=metricFromDevice(d, vals, ['number_of_racks','rack_count','total_racks']);
+    const rackText=(onlineRacks!=='-'||totalRacks!=='-')?`${onlineRacks}/${totalRacks}`:'-';
+    return `<tr class="${isSel?'selected-row':''}" onclick="if($('opsBmsDevice')){$('opsBmsDevice').value='${esc(d.name)}'; renderBmsControl(); renderBmsPresetRegisters();}"><td>${esc(d.name)}</td><td>${pill(d.connection||'')}</td><td>${fmtMetric(soc,'%',1)}</td><td>${fmtMetric(voltage,' V',1)}</td><td>${fmtMetric(current,' A',1)}</td><td>${fmtMetric(power,' kW',1)}</td><td><span class="pill ${esc(stClass)}">${esc(statusLabel)}</span></td><td>${esc(rackText)}</td><td>${esc(d.updated_at||d.last_update||d.last_seen||'-')}</td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','start')">Connect</button> <button onclick="event.stopPropagation(); bmsByName('${esc(d.name)}','stop')">Disconnect</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','on')">HV ON</button> <button onclick="event.stopPropagation(); bmsHvByName('${esc(d.name)}','off')">HV OFF</button> <button onclick="event.stopPropagation(); bmsCommandByName('${esc(d.name)}','clear_fault')">Clear Fault</button> <button onclick="event.stopPropagation(); bmsHeartbeatByName('${esc(d.name)}')">Heartbeat</button></td></tr>`;
   }).join('') || '<tr><td colspan="10" class="muted">No BMS devices</td></tr>';
 }
 async function csvBms(start){ const device=opsBmsName(); const payload=device?{devices:[device]}:{devices:[]}; const data=await postJson(start?'/api/csv/bms/start':'/api/csv/bms/stop', payload, 'opsCommandResult'); $('opsCsvStatus').textContent=JSON.stringify(data.recording||data, null, 2); }
@@ -5394,7 +5610,7 @@ function populatePcsSelected(){ if(!SNAP) return; const sel=$('pcsSelected'); if
 function selectedPcs(){ return $('pcsSelected') ? $('pcsSelected').value : ''; }
 function renderPcsCards(){ const rows=pcsRows(); const online=rows.filter(d=>d.online || d.connection==='online').length; if($('pcsControlCards')) $('pcsControlCards').innerHTML=[['PCS Total',rows.length,''],['Online',online,online===rows.length?'ok':'warn'],['Running',((SNAP?.workers||{}).pcs_running||[]).length,'accent'],['Errors',rows.filter(d=>d.error||d.errors).length,'bad']].map(([l,v,c])=>`<div class="card"><div class="label">${esc(l)}</div><div class="value ${c}">${esc(v)}</div></div>`).join(''); }
 function pcsStateLabel(vals, d, keys){ const v=bmsMetric(vals, keys); if(v==='-'||v===undefined||v===null||v==='') return d.status||'-'; const n=Number(v); if(Number.isFinite(n)){ if(n===0) return 'Open/Off'; if(n===1) return 'Closed/On'; return String(v); } return String(v); }
-function renderPCS(){ if(!SNAP) return; populatePcsSelected(); const rows=pcsRows(); $('pcsCount').textContent=`${rows.length} PCS`; $('pcsRows').innerHTML=rows.map(d=>{ const vals=d.latest_values||d.snapshot||{}; const isSel=selectedPcs()===d.name; const ac=pcsStateLabel(vals,d,['ac_breaker_status','ac_contactor_status','grid_contactor_status','ac_relay_status']); const dc=pcsStateLabel(vals,d,['dc_breaker_status','dc_contactor_status','dc_relay_status','dc_breaker_closed']); const run=pcsStateLabel(vals,d,['run_status','work_status','running_status','pcs_running','power_on_status']); return `<tr class="${isSel?'selected-row':''}" onclick="if($('pcsSelected')){$('pcsSelected').value='${esc(d.name)}'; renderPCS();}"><td>${esc(d.name)}</td><td>${pill(d.connection)}</td><td>${esc(d.status||'')}</td><td>${esc(ac)}</td><td>${esc(dc)}</td><td>${esc(run)}</td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','connect')">Connect Polling</button> <button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','stop')">Disconnect Polling</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','start')">PCS Start</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','stop')">PCS Stop</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','close_dc_breaker')">Close DC</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','open_dc_breaker')">Open DC</button></td></tr>`}).join('') || '<tr><td colspan="8" class="muted">No PCS devices</td></tr>'; renderPcsCards(); }
+function renderPCS(){ if(!SNAP) return; populatePcsSelected(); const rows=pcsRows(); $('pcsCount').textContent=`${rows.length} PCS`; $('pcsRows').innerHTML=rows.map(d=>{ const vals=d.latest_values||d.snapshot||{}; const isSel=selectedPcs()===d.name; const ac=pcsStateLabel(vals,d,['ac_breaker_status','ac_contactor_status','grid_contactor_status','ac_relay_status']); const dc=pcsStateLabel(vals,d,['dc_breaker_status','dc_contactor_status','dc_relay_status','dc_breaker_closed']); const run=pcsStateLabel(vals,d,['run_status','work_status','running_status','pcs_running','power_on_status']); return `<tr class="${isSel?'selected-row':''}" onclick="if($('pcsSelected')){$('pcsSelected').value='${esc(d.name)}'; renderPCS();}"><td>${esc(d.name)}</td><td>${pill(d.connection)}</td><td>${esc(d.status||'')}</td><td>${esc(ac)}</td><td>${esc(dc)}</td><td>${esc(run)}</td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','connect')">Connect Comm</button> <button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','stop')">Disconnect Comm</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','start')">PCS Start</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','stop')">PCS Stop</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','close_dc_breaker')">Close DC</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','open_dc_breaker')">Open DC</button></td></tr>`}).join('') || '<tr><td colspan="8" class="muted">No PCS devices</td></tr>'; renderPcsCards(); }
 
 function renderPcsAlarms(){
   const tb=$('pcsAlarmRows'); if(!tb) return;
@@ -6315,6 +6531,19 @@ def create_fastapi_app(bridge: RuntimeApiBridge):
     async def bms_version(request: Request) -> dict[str, Any]:
         payload = await _json_or_empty(request)
         return bridge.enqueue("read_bms_version", device=_first_nonempty(payload.get("device"), payload.get("name")), sbmu_count=int(payload.get("sbmu_count") or 1), timeout_s=10.0)
+
+    @app.post("/api/bms/racks/read")
+    async def bms_racks_read(request: Request) -> dict[str, Any]:
+        payload = await _json_or_empty(request)
+        return bridge.enqueue("read_bms_racks", device=_first_nonempty(payload.get("device"), payload.get("name")), count=int(payload.get("count") or 16), timeout_s=25.0)
+
+    @app.post("/api/bms/racks/apply-mask")
+    async def bms_racks_apply_mask(request: Request) -> dict[str, Any]:
+        payload = await _json_or_empty(request)
+        conf = _confirmation_required("bms_command", payload)
+        if not conf.get("ok"):
+            return conf
+        return bridge.enqueue("apply_bms_rack_mask", device=_first_nonempty(payload.get("device"), payload.get("name")), changes=list(payload.get("changes") or []), _risk="high", _confirmed=True, timeout_s=20.0)
 
     @app.post("/api/bms/command")
     async def bms_command(request: Request, command: str = "", scope: str = "", device: str = "") -> dict[str, Any]:
