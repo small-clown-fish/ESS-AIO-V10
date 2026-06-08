@@ -1559,11 +1559,42 @@ class RuntimeApiBridge(QObject):
 
         def _latest_values(snapshot: dict[str, Any]) -> dict[str, Any]:
             snapshot = snapshot or {}
+            charge_p = _num_from_snapshot(snapshot, ["charge_active_power", "charging_active_power", "active_charge_power", "active_power_charge"])
+            if charge_p is None and "discharge_active_power" in snapshot:
+                # Kehua profiles expose charge P as active_power (7022) and discharge P as discharge_active_power (7024).
+                charge_p = _num_from_snapshot(snapshot, ["active_power"])
+            discharge_p = _num_from_snapshot(snapshot, ["discharge_active_power", "discharging_active_power", "active_discharge_power", "active_power_discharge"])
+            running_p = _num_from_snapshot(snapshot, ["actual_power", "running_active_power", "running_active_power_kw", "p", "p_kw", "power_kw", "power"])
+            if discharge_p is not None or charge_p is not None:
+                if discharge_p is not None and abs(float(discharge_p)) > 1e-9:
+                    running_p = float(discharge_p)
+                elif charge_p is not None and abs(float(charge_p)) > 1e-9:
+                    running_p = -float(charge_p)
+                else:
+                    running_p = float(discharge_p if discharge_p is not None else -(charge_p or 0.0))
+
+            capacitive_q = _num_from_snapshot(snapshot, ["capacitive_reactive_power", "reactive_power", "q_cap", "q_capacitive"])
+            inductive_q = _num_from_snapshot(snapshot, ["inductive_reactive_power", "q_ind", "q_inductive"])
+            running_q = _num_from_snapshot(snapshot, ["actual_reactive_power", "running_reactive_power", "running_reactive_power_kvar", "q", "q_kvar", "reactive_power_kvar"])
+            if capacitive_q is not None or inductive_q is not None:
+                if capacitive_q is not None and abs(float(capacitive_q)) > 1e-9:
+                    running_q = float(capacitive_q)
+                elif inductive_q is not None and abs(float(inductive_q)) > 1e-9:
+                    running_q = -float(inductive_q)
+                else:
+                    running_q = float(capacitive_q if capacitive_q is not None else -(inductive_q or 0.0))
+
             values = {
                 "soc": _num_from_snapshot(snapshot, ["soc", "SOC", "system_soc", "mbmu_soc", "soc_percent", "soc_value"]),
                 "voltage": _num_from_snapshot(snapshot, ["voltage", "system_voltage", "total_voltage", "pack_voltage", "dc_voltage", "voltage_value"]),
                 "current": _num_from_snapshot(snapshot, ["current", "system_current", "pack_current", "dc_current", "current_value"]),
                 "power": _num_from_snapshot(snapshot, ["power", "system_power", "power_kw", "actual_power", "active_power", "active_power_kw", "dc_power", "p_kw"]),
+                "active_power": running_p,
+                "charge_active_power": charge_p,
+                "discharge_active_power": discharge_p,
+                "reactive_power": running_q,
+                "capacitive_reactive_power": capacitive_q,
+                "inductive_reactive_power": inductive_q,
                 "bms_status": _first_present(snapshot, ["bms_status", "system_status", "status", "state", "work_status", "running_status"]),
                 "bms_power_on": _first_present(snapshot, ["bms_power_on", "power_on", "power_on_status"]),
                 "hv_online_racks": _num_from_snapshot(snapshot, ["number_of_hv_connected_racks", "hv_online_racks", "online_rack_count", "rack_online_count", "racks_online"]),
@@ -4667,7 +4698,7 @@ def _runtime_dashboard_html() -> str:
             </div>
           </div></section>
         </section>
-        <section class="section"><div class="head"><h2>PCS Devices</h2><span class="muted" id="pcsCount"></span></div><div class="scroll"><table><thead><tr><th>Name</th><th>Connection</th><th>Status</th><th>AC</th><th>DC</th><th>Run</th><th>Last message</th><th>Action</th></tr></thead><tbody id="pcsRows"></tbody></table></div></section>
+        <section class="section"><div class="head"><h2>PCS Devices</h2><span class="muted" id="pcsCount"></span></div><div class="scroll"><table><thead><tr><th>Name</th><th>Connection</th><th>Status</th><th>AC</th><th>DC</th><th>Run</th><th>Active P</th><th>Reactive Q</th><th>Last message</th><th>Action</th></tr></thead><tbody id="pcsRows"></tbody></table></div></section>
       </section>
       
         <section class="section"><div class="head"><h2>PCS Alarms / Faults</h2><span class="muted">Derived from PCS runtime state, latest snapshot and Alarm Center.</span></div><div class="scroll"><table><thead><tr><th>PCS</th><th>Severity</th><th>Status</th><th>Message</th></tr></thead><tbody id="pcsAlarmRows"></tbody></table></div></section><section id="page-strategy" data-title="Strategy Center" class="page">
@@ -5610,7 +5641,7 @@ function populatePcsSelected(){ if(!SNAP) return; const sel=$('pcsSelected'); if
 function selectedPcs(){ return $('pcsSelected') ? $('pcsSelected').value : ''; }
 function renderPcsCards(){ const rows=pcsRows(); const online=rows.filter(d=>d.online || d.connection==='online').length; if($('pcsControlCards')) $('pcsControlCards').innerHTML=[['PCS Total',rows.length,''],['Online',online,online===rows.length?'ok':'warn'],['Running',((SNAP?.workers||{}).pcs_running||[]).length,'accent'],['Errors',rows.filter(d=>d.error||d.errors).length,'bad']].map(([l,v,c])=>`<div class="card"><div class="label">${esc(l)}</div><div class="value ${c}">${esc(v)}</div></div>`).join(''); }
 function pcsStateLabel(vals, d, keys){ const v=bmsMetric(vals, keys); if(v==='-'||v===undefined||v===null||v==='') return d.status||'-'; const n=Number(v); if(Number.isFinite(n)){ if(n===0) return 'Open/Off'; if(n===1) return 'Closed/On'; return String(v); } return String(v); }
-function renderPCS(){ if(!SNAP) return; populatePcsSelected(); const rows=pcsRows(); $('pcsCount').textContent=`${rows.length} PCS`; $('pcsRows').innerHTML=rows.map(d=>{ const vals=d.latest_values||d.snapshot||{}; const isSel=selectedPcs()===d.name; const ac=pcsStateLabel(vals,d,['ac_breaker_status','ac_contactor_status','grid_contactor_status','ac_relay_status']); const dc=pcsStateLabel(vals,d,['dc_breaker_status','dc_contactor_status','dc_relay_status','dc_breaker_closed']); const run=pcsStateLabel(vals,d,['run_status','work_status','running_status','pcs_running','power_on_status']); return `<tr class="${isSel?'selected-row':''}" onclick="if($('pcsSelected')){$('pcsSelected').value='${esc(d.name)}'; renderPCS();}"><td>${esc(d.name)}</td><td>${pill(d.connection)}</td><td>${esc(d.status||'')}</td><td>${esc(ac)}</td><td>${esc(dc)}</td><td>${esc(run)}</td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','connect')">Connect Comm</button> <button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','stop')">Disconnect Comm</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','start')">PCS Start</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','stop')">PCS Stop</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','close_dc_breaker')">Close DC</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','open_dc_breaker')">Open DC</button></td></tr>`}).join('') || '<tr><td colspan="8" class="muted">No PCS devices</td></tr>'; renderPcsCards(); }
+function renderPCS(){ if(!SNAP) return; populatePcsSelected(); const rows=pcsRows(); $('pcsCount').textContent=`${rows.length} PCS`; $('pcsRows').innerHTML=rows.map(d=>{ const vals=d.latest_values||d.snapshot||{}; const isSel=selectedPcs()===d.name; const ac=pcsStateLabel(vals,d,['ac_breaker_status','ac_contactor_status','grid_contactor_status','ac_relay_status']); const dc=pcsStateLabel(vals,d,['dc_breaker_status','dc_contactor_status','dc_relay_status','dc_breaker_closed']); const run=pcsStateLabel(vals,d,['run_status','work_status','running_status','pcs_running','power_on_status']); const p=fmtMetric(bmsMetric(vals,['active_power','actual_power','power','power_kw','p_kw']), ' kW', 1); const q=fmtMetric(bmsMetric(vals,['reactive_power','actual_reactive_power','q','q_kvar','reactive_power_kvar','capacitive_reactive_power','inductive_reactive_power']), ' kvar', 1); return `<tr class="${isSel?'selected-row':''}" onclick="if($('pcsSelected')){$('pcsSelected').value='${esc(d.name)}'; renderPCS();}"><td>${esc(d.name)}</td><td>${pill(d.connection)}</td><td>${esc(d.status||'')}</td><td>${esc(ac)}</td><td>${esc(dc)}</td><td>${esc(run)}</td><td>${p}</td><td>${q}</td><td>${esc(d.last_message||'')}</td><td><button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','connect')">Connect Comm</button> <button onclick="event.stopPropagation(); pcsSingle('${esc(d.name)}','stop')">Disconnect Comm</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','start')">PCS Start</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','stop')">PCS Stop</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','close_dc_breaker')">Close DC</button> <button onclick="event.stopPropagation(); pcsOneCommand('${esc(d.name)}','open_dc_breaker')">Open DC</button></td></tr>`}).join('') || '<tr><td colspan="10" class="muted">No PCS devices</td></tr>'; renderPcsCards(); }
 
 function renderPcsAlarms(){
   const tb=$('pcsAlarmRows'); if(!tb) return;

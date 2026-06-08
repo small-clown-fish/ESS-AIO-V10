@@ -593,6 +593,7 @@ class PcsClient:
             "ac_breaker_status",
             "active_power",
             "reactive_power",
+            "inductive_reactive_power",
             "dc_voltage",
             "dc_current",
             "run_status",

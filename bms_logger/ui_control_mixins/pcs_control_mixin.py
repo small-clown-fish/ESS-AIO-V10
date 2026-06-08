@@ -185,6 +185,7 @@ class PcsControlMixin:
             "active_power",
             "discharge_active_power",
             "reactive_power",
+            "inductive_reactive_power",
             "dc_voltage",
             "dc_current",
             "ac_voltage",
