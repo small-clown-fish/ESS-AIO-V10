@@ -21,8 +21,8 @@ class ClusterStrategySettings:
     ramp_interval_s: float = 5.0
     monitor_interval_s: float = 1.0
     bms_response_timeout_s: float = 5.0
-    charge_stop_max_cell_mv: float = 3550.0
-    discharge_stop_min_cell_mv: float = 2800.0
+    charge_stop_max_cell_mv: float = 3650.0
+    discharge_stop_min_cell_mv: float = 2500.0
     positive_power_means: str = "discharge"  # discharge/charge
     allocation_mode: str = "equal_split"
     clamp_margin: float = 1.0
